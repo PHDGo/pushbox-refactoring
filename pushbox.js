@@ -9,7 +9,7 @@
 		levelFinished = false,
 		canvasW = 0,
 		canvasH = 0,
-		levelN = 0,
+		levelN = 2,
 		counter = 0,
 		tileSize = 32,
 		imgGridWidth = 30,
@@ -551,23 +551,24 @@
 
 			for (var i = 0; i < chestslen; i++) {
 				mapGridCoor = chests[i];
-				oItem = {type: "chest", id: id++, gridWidth: 1, gridHeight: 1, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], speed: 0};
-				chest = Object.assign({}, new OriginObj(oItem));
+				oItem = {type: "chest", id: id++, box: Chest.box, gridWidth: 1, gridHeight: 1, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], speed: 0};
+				chest = new boxObj(oItem);
 				Object.assign(chest, commonFunc, Chest);
 				chest.init();
 				chestList.push(chest);
 				beingList.push(chest);
 			};
 
-			man = Object.assign({}, new OriginObj({
+			man = new boxObj({
 					type: "human",
 					id: 0,
+					box: Role.box,
 					gridWidth: 2,
 					gridHeight: 2,
 					mapGridX: curLevel.born.x,
 					mapGridY: curLevel.born.y,
 					speed: 8,
-				}));
+				});
 			Object.assign(man, commonFunc, Role);
 			man.init();
 			beingList.push(man);
@@ -613,14 +614,16 @@
 		screen.style.display = 'none';
 	};
 
-	var OriginObj = function(oProp) {
+	var boxObj = function(oProp) {
 		var actions = oProp.actions,
 			startIndex = 0,
+			box = oProp.box,
 			frame,
 			name,
 			options = {
 				type: "",
 				id: 0,
+				box: {},
 				gridWidth: 0,
 				gridHeight: 0,
 				mapGridX: 0,
@@ -634,17 +637,38 @@
 			};
 		};
 
+		switch (oProp.type) {
+			case 'human':
+				offsetX = 16;
+				offsetY = 36;
+				break;
+			case 'chest':
+				offsetX = 0;
+				offsetY = 0;
+				break;
+		}
+
 		this.type = oProp.type;
 		this.id = oProp.id;
 		this.frameWidth = oProp.gridWidth * tileSize;
 		this.frameHeight = oProp.gridHeight * tileSize;
+
 		this.mapGridX = oProp.mapGridX;
 		this.mapGridY = oProp.mapGridY;
+		this.pixelOffsetX = offsetX + box['marginLeft'];
+		this.pixelOffsetY = offsetY + box['marginUp'];
+		this.X = this.mapGridX * tileSize + box['marginLeft'];
+		this.Y = this.mapGridY * tileSize + box['marginUp'];
+		this.prePosition = {X: this.X, Y: this.Y};
+		this.width = tileSize - box.marginLeft - box.marginRight;
+		this.height = tileSize - box.marginUp - box.marginDown;
+
 		this.dir = '';
 		this.speed = oProp.speed;
 		this.curFrameIndex = 0;
 		this.animFrame = 0;
 		this.imgPos = [0, 0];
+		console.log(this.pixelOffsetX);
 	};
 
 	var commonFunc = {
@@ -689,6 +713,19 @@
 				};
 			};
 			return interChestList;
+		},
+
+		restorePosition: function(dir) {
+			switch (dir) {
+				case 'up':
+				case 'down':
+					this.Y = this.prePosition.Y;
+					break;
+				case 'left':
+				case 'right':
+					this.X = this.prePosition.X;
+					break;
+			}
 		}
 	}
 
@@ -704,28 +741,19 @@
 		],
 
 		box: {
-			marginLeft: 4,
-			marginRight: 4,
-			marginUp: 0,
+			marginLeft: 3,
+			marginRight: 3,
+			marginUp: 10,
 			marginDown: 0
 		},
 
 		init: function() {
 			var rawActions = this.rawActions,
-				len = rawActions.length,
 				startIndex = 0,
-				box = this.box,
 				rawAction,
 				frame,
 				name;
 			this.imgPos = [0, 0];
-			this.pixelOffsetX = 16 + box['marginLeft'];
-			this.pixelOffsetY = 36 + box['marginUp'];
-			this.X = this.mapGridX * tileSize + box['marginLeft'];
-			this.Y = this.mapGridY * tileSize + box['marginUp'];
-			this.prePossition = {X: this.X, Y: this.Y};
-			this.width = tileSize - box.marginLeft - box.marginRight;
-			this.height = tileSize - box.marginUp - box.marginDown;
 			this.actions = {};
 			for (var rawAction of rawActions) {
 				name = rawAction['name'];
@@ -734,8 +762,9 @@
 				startIndex += frame;
 			};
 			this.oAct = this.actions['standR'];
+			this.faceTo = 'R';
 			this.pushSpeed = 5;
-			this.pushingOffset = this.speed - this.pushSpeed;
+			this.pushingOffset = 4;
 			console.log(this.actions)
 		},
 
@@ -767,68 +796,52 @@
 		},
 
 		animate: function() {
-			var oAct = this.oAct,
-				startIndex = oAct.startIndex,
-				frame = oAct.frame,
-				actName = oAct.name;
+			// console.log(this.oAct);
 			this.calculateCoor();
 			this.inShade = this.detectInShade();
-			if (actName == 'standR' || actName == 'standL') {
-				if (Math.random() > 0.99) {
-					this.processOrder('play', {});
-				};
-			};
-			if (this.curFrameIndex >= startIndex + frame) {
-				this.curFrameIndex = startIndex;
-				if (actName == 'playR' || actName == 'playL') {
-					this.processOrder('stand', {});
-				};
-			};
-			this.curFrameIndex++;
-			
-			console.log(oAct, startIndex, this.curFrameIndex);
+			console.log(this.oAct, this.oAct.startIndex, this.curFrameIndex);
 		},
 
 		processOrder:function(order, details) {
+			var startIndex;
 			switch (order) {
 				case 'pushBox':
 					details.interObj.processOrder('move', details);
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'walk' + details.faceTo;
-					if (this.oAct.name !== nextAct) {
-						this.oAct = this.actions[nextAct];
-						this.faceTo = details.faceTo;
-						this.curFrameIndex = this.oAct.startIndex;
-					};
+					this.alterFrame(nextAct, details);
 					break;
 				case 'stand':
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'stand' + details.faceTo;
-					if (this.oAct.name !== nextAct) {
-						this.oAct = this.actions[nextAct];
-						this.faceTo = details.faceTo;
-						this.curFrameIndex = this.oAct.startIndex;
-					};
-					break;
+					this.alterFrame(nextAct, details);
+					if (Math.random() > 0.99) { this.processOrder('play', {}); };
 				case 'walk':
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'walk' + details.faceTo;
-					if (this.oAct.name !== (nextAct)) {
-						this.oAct = this.actions[nextAct];
-						this.faceTo = details.faceTo;
-						this.curFrameIndex = this.oAct.startIndex;
-					};
+					this.alterFrame(nextAct, details);
 					break;
 				case 'play':
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'play' + details.faceTo;
-					if (this.oAct.name !== nextAct) {
-						this.oAct = this.actions[nextAct];
-						this.faceTo = details.faceTo;
-						this.curFrameIndex = this.oAct.startIndex;
-					};
+					this.alterFrame(nextAct, details);
 					break;
 			}
+		},
+
+		alterFrame: function(nextAct, details) {
+			var startIndex;
+			if (this.oAct.name !== nextAct) {
+				this.oAct = this.actions[nextAct];
+				this.faceTo = details.faceTo;
+				this.curFrameIndex = this.oAct.startIndex;
+			} else {
+				this.curFrameIndex++;
+				startIndex = this.oAct.startIndex;
+				if (this.curFrameIndex >= startIndex + this.oAct.frame) {
+					this.curFrameIndex = startIndex;
+				};
+			};
 		},
 
 		calculateCoor: function() {
@@ -837,69 +850,93 @@
 					this.X -= this.speed;
 					var chests = this.intersectWithChest(),
 						grid = this.intersectWithWall(),
-						len = chests.length;
+						nOfChests = chests.length,
+						chest;
 					if (grid) {
 						this.X = grid.X + tileSize;
-					} else if (len > 1) {
-						this.X = this.prePossition.X;
-					}else if (len == 1) {
-						this.X += this.pushingOffset;
+					} else if (nOfChests > 1) {
+						// this.restorePosition(dir);
+						chest = chests[0];
+						this.X = chest.X + chest.width;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.X < chest.X + chest.width) {
+							this.X = chest.X + chest.width;
+						};
 						this.processOrder('pushBox', {faceTo: 'L', dir: 'left', distance: this.pushSpeed, interObj: chests[0]});
 					} else {
 						this.processOrder('walk', {faceTo: 'L'});
 					};
-					this.prePossition.X = this.X;
+					// this.prePosition.X = this.X;
 					break;
 				case 'right':
 					this.X += this.speed;
 					var chests = this.intersectWithChest(),
 						grid = this.intersectWithWall(),
-						len = chests.length;
+						nOfChests = chests.length,
+						chest;
 					if (grid) {
 						this.X = grid.X - this.width;
-					} else if (len > 1) {
-						this.X = this.prePossition.X;
-					} else if (len == 1) {
-						this.X -= this.pushingOffset;
+					} else if (nOfChests > 1) {
+						// this.restorePosition(dir);
+						var chest = chests[0];
+						this.X = chest.X - this.width;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.X > chest.X - this.width) {
+							this.X = chest.X - this.width;
+						};
 						this.processOrder('pushBox', {faceTo: 'R', dir: 'right', distance: this.pushSpeed, interObj: chests[0]});
 					} else {
 						this.processOrder('walk', {faceTo: 'R'});
 					};
-					this.prePossition.X = this.X;
+					// this.prePosition.X = this.X;
 					break;
 				case 'up':
 					this.Y -= this.speed;
 					var chests = this.intersectWithChest(),
 						grid = this.intersectWithWall(),
-						len = chests.length;
+						nOfChests = chests.length,
+						chest;
 					if (grid) {
 						this.Y = grid.Y + tileSize;
-					} else if (len > 1) {
-						this.Y = this.prePossition.Y;
-					} else if (len == 1) {
-						this.Y += this.pushingOffset;
+					} else if (nOfChests > 1) {
+						// this.restorePosition(dir);
+						var chest = chests[0];
+						this.Y = chest.Y + chest.height;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.Y < chest.Y + chest.height) {
+							this.Y = chest.Y + chest.height;
+						};
 						this.processOrder('pushBox', {dir: 'up', distance: this.pushSpeed, interObj: chests[0]});
 					} else {
 						this.processOrder('walk', {});
 					};
-					this.prePossition.Y = this.Y;
+					// this.prePosition.Y = this.Y;
 					break;
 				case 'down':
 					this.Y += this.speed;
 					var chests = this.intersectWithChest(),
 						grid = this.intersectWithWall(),
-						len = chests.length;
+						nOfChests = chests.length,
+						chest;
 					if (grid) {
 						this.Y = grid.Y - this.height;
-					} else if (len > 1) {
-						this.Y = this.prePossition.Y;
-					} else if (len == 1) {
-						this.Y -= this.pushingOffset;
+					} else if (nOfChests > 1) {
+						// this.restorePosition(dir);
+						var chest = chests[0];
+						this.Y = chest.Y - this.height;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.Y > chest.Y - this.height) {
+							this.Y = chest.Y - this.height;
+						};
 						this.processOrder('pushBox', {dir: 'down', distance: this.pushSpeed, interObj: chests[0]});
 					} else {
 						this.processOrder('walk', {});
 					};
-					this.prePossition.Y = this.Y;
+					// this.prePosition.Y = this.Y;
 					break;
 				default:
 					var name = this.oAct.name,
@@ -908,6 +945,7 @@
 					if (act !== 'play') {
 						this.processOrder('stand', {});
 					}
+					// console.log(name, this.curFrameIndex);
 			}
 		},
 	};
@@ -922,17 +960,7 @@
 		},
 
 		init: function() {
-			var box = this.box,
-				mapGridX = this.mapGridX;
 			this.imgPos = [0, 64];
-			this.pixelOffsetX = 0 + box['marginLeft'];
-			this.pixelOffsetY = 0 + box['marginUp'];
-			this.X = this.mapGridX * tileSize + box['marginLeft'];
-			this.Y = this.mapGridY * tileSize + box['marginUp'];
-			this.prePossition = {X: this.X, Y: this.Y};
-			this.width = tileSize - box.marginLeft - box.marginRight;
-			this.height = tileSize - box.marginUp - box.marginDown;
-			console.log(this.X, this.Y);
 		},
 
 		animate: function() {
@@ -940,7 +968,7 @@
 		},
 
 		calculateCoor: function() {
-			var prePossition = this.prePossition,
+			var // prePosition = this.prePosition,
 				interGrid,
 				interChest,
 				dir = this.dir;
@@ -949,13 +977,21 @@
 					case 'up':
 						if (this.speed > 0) {
 							this.Y -= this.speed;
-							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest().length;
-							if (interGrid || interChest) {
-								this.restorePossition(dir);
+							interGrid = this.intersectWithWall();
+							interChest = this.intersectWithChest();
+							interChestLen = interChest.length;
+							if (interGrid) {
+								this.Y = interGrid.Y + tileSize;
+							} else if (interChestLen) {
+								this.Y = interChest[0].Y + interChest[0].height;
 							}
+							// if (interGrid || interChest) {
+							// 	// this.restorePosition(dir);
+							// 	// this.speed = 0;
+							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
+							// }
 							this.speed += this.friction;
-							this.prePossition.Y = this.Y;
+							// this.prePosition.Y = this.Y;
 						} else {
 							this.dir = '';
 						};
@@ -964,12 +1000,20 @@
 						if (this.speed > 0) {
 							this.Y += this.speed;
 							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest().length;
-							if (interGrid || interChest) {
-								this.restorePossition(dir);
+							interChest = this.intersectWithChest();
+							interChestLen = interChest.length;
+							if (interGrid) {
+								this.Y = interGrid.Y - this.height;
+							} else if (interChestLen) {
+								this.Y = interChest[0].Y - this.height;
 							}
+							// if (interGrid || interChest) {
+							// 	// this.restorePosition(dir);
+							// 	// this.speed = 0;
+							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
+							// }
 							this.speed += this.friction;
-							this.prePossition.Y = this.Y;
+							// this.prePosition.Y = this.Y;
 						} else {
 							this.dir = '';
 						};
@@ -978,12 +1022,20 @@
 						if (this.speed > 0) {
 							this.X -= this.speed;
 							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest().length;
-							if (interGrid || interChest) {
-								this.restorePossition(dir);
+							interChest = this.intersectWithChest();
+							interChestLen = interChest.length;
+							if (interGrid) {
+								this.X = interGrid.X + tileSize;
+							} else if (interChestLen) {
+								this.X = interChest[0].X + interChest[0].width;
 							}
+							// if (interGrid || interChest) {
+							// 	// this.restorePosition(dir);
+							// 	// this.speed = 0;
+							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
+							// }
 							this.speed += this.friction;
-							this.prePossition.X = this.X;
+							// this.prePosition.X = this.X;
 						} else {
 							this.dir = '';
 						};
@@ -992,30 +1044,25 @@
 						if (this.speed > 0) {
 							this.X += this.speed;
 							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest().length;
-							if (interGrid || interChest) {
-								this.restorePossition(dir);
+							interChest = this.intersectWithChest();
+							interChestLen = interChest.length;
+							if (interGrid) {
+								this.X = interGrid.X - this.width;
+							} else if (interChestLen) {
+								this.X = interChest[0].X - this.width;
 							}
+							// if (interGrid || interChest) {
+							// 	// this.restorePosition(dir);
+							// 	// this.speed = 0;
+							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
+							// }
 							this.speed += this.friction;
-							this.prePossition.X = this.X;
+							// this.prePosition.X = this.X;
 						} else {
 							this.dir = '';
 						};
 						break;
 				}
-			}
-		},
-
-		restorePossition: function(dir) {
-			switch (dir) {
-				case 'up':
-				case 'down':
-					this.Y = this.prePossition.Y;
-					break;
-				case 'left':
-				case 'right':
-					this.X = this.prePossition.X;
-					break;
 			}
 		},
 
