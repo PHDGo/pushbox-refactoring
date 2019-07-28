@@ -1,4 +1,5 @@
 ;(function(){
+	const sin45 = Math.sin(45 * Math.PI / 180);
 	var botCtx = null,
 		stageCtx = null,
 		topCtx = null,
@@ -9,7 +10,7 @@
 		levelFinished = false,
 		canvasW = 0,
 		canvasH = 0,
-		levelN = 2,
+		levelN = 0,
 		counter = 0,
 		tileSize = 32,
 		imgGridWidth = 30,
@@ -44,7 +45,7 @@
 
 		animate: function() {
 			unit.animate();
-			// console.log('left:', ctrl.left, 'right:', ctrl.right, 'up:', ctrl.up, 'down:', ctrl.down, 'ctrl.dir:', ctrl.dir);
+			console.log('left:', ctrl.left, 'right:', ctrl.right, 'up:', ctrl.up, 'down:', ctrl.down, 'ctrl.dir:', ctrl.dir);
 		},
 
 		draw: function() {
@@ -142,7 +143,6 @@
 		right: false,
 		up: false,
 		down: false,
-		dir: '',
 
 		init: function() {
 			addEvent(window, 'keydown', this.keydown);
@@ -153,25 +153,17 @@
 			e = e || window.event;
 			switch (e.keyCode) {
 				case 37:
-					if (!(ctrl.left || ctrl.right || ctrl.up || ctrl.down)) {
-						ctrl.left = true;
-						ctrl.dir = 'left';
-					};
+					ctrl.left = true;
+					break;
 				case 38:
-					if (!(ctrl.left || ctrl.right || ctrl.up || ctrl.down)) {
-						ctrl.up = true;
-						ctrl.dir = 'up';
-					};
+					ctrl.up = true;
+					break;
 				case 39:
-					if (!(ctrl.left || ctrl.right || ctrl.up || ctrl.down)) {
-						ctrl.right = true;
-						ctrl.dir = 'right';
-					};
+					ctrl.right = true;
+					break;
 				case 40:
-					if (!(ctrl.left || ctrl.right || ctrl.up || ctrl.down)) {
-						ctrl.down = true;
-						ctrl.dir = 'down';					
-					};
+					ctrl.down = true;
+					break;
 			};
 		},
 
@@ -190,9 +182,6 @@
 					ctrl.down = false;
 					break;
 			};
-			if (!(ctrl.left || ctrl.right || ctrl.up || ctrl.down)) {
-				ctrl.dir = '';
-			}
 		},
 	};
 
@@ -551,7 +540,7 @@
 
 			for (var i = 0; i < chestslen; i++) {
 				mapGridCoor = chests[i];
-				oItem = {type: "chest", id: id++, box: Chest.box, gridWidth: 1, gridHeight: 1, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], speed: 0};
+				oItem = {type: "chest", id: id++, box: Chest.box, gridWidth: 1, gridHeight: 2, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], speed: 0};
 				chest = new boxObj(oItem);
 				Object.assign(chest, commonFunc, Chest);
 				chest.init();
@@ -644,7 +633,7 @@
 				break;
 			case 'chest':
 				offsetX = 0;
-				offsetY = 0;
+				offsetY = 32;
 				break;
 		}
 
@@ -668,7 +657,6 @@
 		this.curFrameIndex = 0;
 		this.animFrame = 0;
 		this.imgPos = [0, 0];
-		console.log(this.pixelOffsetX);
 	};
 
 	var commonFunc = {
@@ -764,7 +752,6 @@
 			this.oAct = this.actions['standR'];
 			this.faceTo = 'R';
 			this.pushSpeed = 5;
-			this.pushingOffset = 4;
 			console.log(this.actions)
 		},
 
@@ -799,7 +786,6 @@
 			// console.log(this.oAct);
 			this.calculateCoor();
 			this.inShade = this.detectInShade();
-			console.log(this.oAct, this.oAct.startIndex, this.curFrameIndex);
 		},
 
 		processOrder:function(order, details) {
@@ -815,7 +801,7 @@
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'stand' + details.faceTo;
 					this.alterFrame(nextAct, details);
-					if (Math.random() > 0.99) { this.processOrder('play', {}); };
+					if (Math.random() > 0.99) { this.processOrder('play', {}) };
 				case 'walk':
 					details.faceTo = details.faceTo || this.faceTo;
 					var nextAct = 'walk' + details.faceTo;
@@ -845,117 +831,138 @@
 		},
 
 		calculateCoor: function() {
-			switch (ctrl.dir) {
-				case 'left':
-					this.X -= this.speed;
-					var chests = this.intersectWithChest(),
-						grid = this.intersectWithWall(),
-						nOfChests = chests.length,
-						chest;
-					if (grid) {
-						this.X = grid.X + tileSize;
-					} else if (nOfChests > 1) {
-						// this.restorePosition(dir);
-						chest = chests[0];
+			var left = ctrl.left,
+				right = ctrl.right,
+				up = ctrl.up,
+				down = ctrl.down,
+				speed = this.speed,
+				pushSpeed = this.pushSpeed,
+				chests,
+				grid,
+				nOfChests,
+				chest;
+			if (left) {
+				if (up || down) {
+					speed = this.speed * sin45;
+					pushSpeed = this.pushSpeed * sin45;
+				};
+				this.X -= speed;
+				chests = this.intersectWithChest();
+				grid = this.intersectWithWall();
+				nOfChests = chests.length;
+				if (grid) {
+					this.X = grid.X + tileSize;
+				} else if (nOfChests > 1) {
+					// this.restorePosition(dir);
+					chest = chests[0];
+					this.X = chest.X + chest.width;
+				} else if (nOfChests == 1) {
+					chest = chests[0];
+					if (this.X < chest.X + chest.width) {
 						this.X = chest.X + chest.width;
-					} else if (nOfChests == 1) {
-						chest = chests[0];
-						if (this.X < chest.X + chest.width) {
-							this.X = chest.X + chest.width;
-						};
-						this.processOrder('pushBox', {faceTo: 'L', dir: 'left', distance: this.pushSpeed, interObj: chests[0]});
-					} else {
-						this.processOrder('walk', {faceTo: 'L'});
 					};
-					// this.prePosition.X = this.X;
-					break;
-				case 'right':
-					this.X += this.speed;
-					var chests = this.intersectWithChest(),
-						grid = this.intersectWithWall(),
-						nOfChests = chests.length,
-						chest;
-					if (grid) {
-						this.X = grid.X - this.width;
-					} else if (nOfChests > 1) {
-						// this.restorePosition(dir);
-						var chest = chests[0];
+					this.processOrder('pushBox', {faceTo: 'L', dir: 'left', distance: pushSpeed, interObj: chests[0]});
+				} else {
+					this.processOrder('walk', {faceTo: 'L'});
+				};
+				// this.prePosition.X = this.X;
+			};
+			if (right) {
+				if (up || down) {
+					speed = this.speed * sin45;
+					pushSpeed = this.pushSpeed * sin45;
+				};
+				this.X += speed;
+				chests = this.intersectWithChest();
+				grid = this.intersectWithWall();
+				nOfChests = chests.length;
+				if (grid) {
+					this.X = grid.X - this.width;
+				} else if (nOfChests > 1) {
+					// this.restorePosition(dir);
+					var chest = chests[0];
+					this.X = chest.X - this.width;
+				} else if (nOfChests == 1) {
+					chest = chests[0];
+					if (this.X > chest.X - this.width) {
 						this.X = chest.X - this.width;
-					} else if (nOfChests == 1) {
-						chest = chests[0];
-						if (this.X > chest.X - this.width) {
-							this.X = chest.X - this.width;
-						};
-						this.processOrder('pushBox', {faceTo: 'R', dir: 'right', distance: this.pushSpeed, interObj: chests[0]});
-					} else {
-						this.processOrder('walk', {faceTo: 'R'});
 					};
-					// this.prePosition.X = this.X;
-					break;
-				case 'up':
-					this.Y -= this.speed;
-					var chests = this.intersectWithChest(),
-						grid = this.intersectWithWall(),
-						nOfChests = chests.length,
-						chest;
-					if (grid) {
-						this.Y = grid.Y + tileSize;
-					} else if (nOfChests > 1) {
-						// this.restorePosition(dir);
-						var chest = chests[0];
+					this.processOrder('pushBox', {faceTo: 'R', dir: 'right', distance: pushSpeed, interObj: chests[0]});
+				} else {
+					this.processOrder('walk', {faceTo: 'R'});
+				};
+				// this.prePosition.X = this.X;
+			};
+			if (up) {
+				if (left || right) {
+					speed = this.speed * sin45;
+					pushSpeed = this.pushSpeed * sin45;
+				};
+				this.Y -= speed;
+				chests = this.intersectWithChest();
+				grid = this.intersectWithWall();
+				nOfChests = chests.length;
+				if (grid) {
+					this.Y = grid.Y + tileSize;
+				} else if (nOfChests > 1) {
+					// this.restorePosition(dir);
+					var chest = chests[0];
+					this.Y = chest.Y + chest.height;
+				} else if (nOfChests == 1) {
+					chest = chests[0];
+					if (this.Y < chest.Y + chest.height) {
 						this.Y = chest.Y + chest.height;
-					} else if (nOfChests == 1) {
-						chest = chests[0];
-						if (this.Y < chest.Y + chest.height) {
-							this.Y = chest.Y + chest.height;
-						};
-						this.processOrder('pushBox', {dir: 'up', distance: this.pushSpeed, interObj: chests[0]});
-					} else {
-						this.processOrder('walk', {});
 					};
-					// this.prePosition.Y = this.Y;
-					break;
-				case 'down':
-					this.Y += this.speed;
-					var chests = this.intersectWithChest(),
-						grid = this.intersectWithWall(),
-						nOfChests = chests.length,
-						chest;
-					if (grid) {
-						this.Y = grid.Y - this.height;
-					} else if (nOfChests > 1) {
-						// this.restorePosition(dir);
-						var chest = chests[0];
+					this.processOrder('pushBox', {dir: 'up', distance: pushSpeed, interObj: chests[0]});
+				} else {
+					this.processOrder('walk', {});
+				};
+				// this.prePosition.Y = this.Y;
+			};
+			if (down) {
+				if (left || right) {
+					speed = this.speed * sin45;
+					pushSpeed = this.pushSpeed * sin45;
+				};
+				this.Y += speed;
+				chests = this.intersectWithChest();
+				grid = this.intersectWithWall();
+				nOfChests = chests.length;
+				if (grid) {
+					this.Y = grid.Y - this.height;
+				} else if (nOfChests > 1) {
+					// this.restorePosition(dir);
+					var chest = chests[0];
+					this.Y = chest.Y - this.height;
+				} else if (nOfChests == 1) {
+					chest = chests[0];
+					if (this.Y > chest.Y - this.height) {
 						this.Y = chest.Y - this.height;
-					} else if (nOfChests == 1) {
-						chest = chests[0];
-						if (this.Y > chest.Y - this.height) {
-							this.Y = chest.Y - this.height;
-						};
-						this.processOrder('pushBox', {dir: 'down', distance: this.pushSpeed, interObj: chests[0]});
-					} else {
-						this.processOrder('walk', {});
 					};
-					// this.prePosition.Y = this.Y;
-					break;
-				default:
-					var name = this.oAct.name,
-						len = name.length,
-						act = name.slice(0, len - 1);
-					if (act !== 'play') {
-						this.processOrder('stand', {});
-					}
-					// console.log(name, this.curFrameIndex);
-			}
-		},
+					this.processOrder('pushBox', {dir: 'down', distance: pushSpeed, interObj: chests[0]});
+				} else {
+					this.processOrder('walk', {});
+				};
+				// this.prePosition.Y = this.Y;
+			};
+			if (!(up || down || left || right)) {
+				var name = this.oAct.name,
+					len = name.length,
+					act = name.slice(0, len - 1);
+				if (act !== 'play') {
+					this.processOrder('stand', {});
+				};
+				// console.log(name, this.curFrameIndex);
+			};
+		}
 	};
 
 	var Chest = {
-		friction: -2,
+		friction: -4,
 		box: {
 			marginLeft: 0,
 			marginRight: 0,
-			marginUp: 10,
+			marginUp: 8,
 			marginDown: 0
 		},
 
@@ -1071,6 +1078,8 @@
 				case 'move':
 					this.dir = details.dir;
 					this.speed = details.distance;
+					break;
+				case 'inplace':
 					break;
 			}
 		},
