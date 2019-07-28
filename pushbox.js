@@ -24,6 +24,7 @@
 		botCanvas: document.getElementById('bot-canvas'),
 		stageCanvas: document.getElementById('stage-canvas'),
 		topCanvas: document.getElementById('top-canvas'),
+		running: false,
 
 		setup: function() {
 			botCtx = this.botCanvas.getContext('2d');
@@ -45,7 +46,11 @@
 
 		animate: function() {
 			unit.animate();
-			console.log('left:', ctrl.left, 'right:', ctrl.right, 'up:', ctrl.up, 'down:', ctrl.down, 'ctrl.dir:', ctrl.dir);
+			if (game.running && checkAllInPlace()) {
+				alert('Yay! You have complete this level.');
+				game.running = false;
+			};
+			// console.log('left:', ctrl.left, 'right:', ctrl.right, 'up:', ctrl.up, 'down:', ctrl.down, 'ctrl.dir:', ctrl.dir);
 		},
 
 		draw: function() {
@@ -495,7 +500,6 @@
 		switchShaders: function() {
 			var shades = curLevel.shade,
 				man = game.man;
-
 			for (var k in shades) {
 				var shade = shades[k].tiles;
 				if (k == man.inShade) {
@@ -540,7 +544,7 @@
 
 			for (var i = 0; i < chestslen; i++) {
 				mapGridCoor = chests[i];
-				oItem = {type: "chest", id: id++, box: Chest.box, gridWidth: 1, gridHeight: 2, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], speed: 0};
+				oItem = {type: "chest", id: id++, box: Chest.box, gridWidth: 1, gridHeight: 2, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], actions: Chest.rawActions, speed: 0};
 				chest = new boxObj(oItem);
 				Object.assign(chest, commonFunc, Chest);
 				chest.init();
@@ -556,19 +560,21 @@
 					gridHeight: 2,
 					mapGridX: curLevel.born.x,
 					mapGridY: curLevel.born.y,
+					actions: Role.rawActions,
 					speed: 8,
 				});
 			Object.assign(man, commonFunc, Role);
 			man.init();
 			beingList.push(man);
 			game.man = man;
+			game.running = true;
 		},
 
 		animate: function() {
 			var len = beingList.length;
 			for (var i = 0; i < len; i++) {
 				beingList[i].animate();
-			}
+			};
 		},
 
 		draw: function() {
@@ -603,12 +609,39 @@
 		screen.style.display = 'none';
 	};
 
+	var chestOnGrid = function(grid) {
+		for (var chest of chestList) {
+			if (chest.mapGridX == grid.mapGridX && chest.mapGridY == grid.mapGridY) {
+				return chest;
+			}
+		}
+	};
+
+	var wallOnGrid = function(grid) {
+		var obstructions = curLevel.mapObstructedTerrain;
+		for (var obs of obstructions) {
+			if (grid.mapGridX == obs[0] && grid.mapGridY == obs[1]) {
+				return obs;
+			};
+		};
+	};
+
+	var checkAllInPlace = function() {
+		for (var chest of chestList) {
+			if (!chest.onRect) {
+				return false;
+			};
+		};
+		return true;
+	};
+
 	var boxObj = function(oProp) {
 		var actions = oProp.actions,
 			startIndex = 0,
-			box = oProp.box,
-			frame,
+			rawActions,
 			name,
+			frame,
+			box = oProp.box,
 			options = {
 				type: "",
 				id: 0,
@@ -617,6 +650,7 @@
 				gridHeight: 0,
 				mapGridX: 0,
 				mapGridY: 0,
+				actions: {},
 				speed: 0
 			};
 		for (var option in options) {
@@ -625,6 +659,16 @@
 				return;
 			};
 		};
+
+		this.actions = {};
+		rawActions = oProp.actions;
+		for (var rawAction of rawActions) {
+			name = rawAction['name'];
+			frame = rawAction['frame'];
+			this.actions[name] = {name: name, startIndex: startIndex, frame: frame};
+			startIndex += frame;
+		};
+		console.log(this.actions);
 
 		switch (oProp.type) {
 			case 'human':
@@ -635,7 +679,7 @@
 				offsetX = 0;
 				offsetY = 32;
 				break;
-		}
+		};
 
 		this.type = oProp.type;
 		this.id = oProp.id;
@@ -703,22 +747,23 @@
 			return interChestList;
 		},
 
-		restorePosition: function(dir) {
-			switch (dir) {
-				case 'up':
-				case 'down':
-					this.Y = this.prePosition.Y;
-					break;
-				case 'left':
-				case 'right':
-					this.X = this.prePosition.X;
-					break;
-			}
-		}
+		// restorePosition: function(dir) {
+		// 	switch (dir) {
+		// 		case 'up':
+		// 		case 'down':
+		// 			this.Y = this.prePosition.Y;
+		// 			break;
+		// 		case 'left':
+		// 		case 'right':
+		// 			this.X = this.prePosition.X;
+		// 			break;
+		// 	}
+		// }
 	}
 
 	var Role = {
 		faceTo: 'R',
+		imgPos: [0, 0],
 		rawActions: [
 			{name: "standR", frame: 10},
 			{name: "standL", frame: 10},
@@ -736,23 +781,9 @@
 		},
 
 		init: function() {
-			var rawActions = this.rawActions,
-				startIndex = 0,
-				rawAction,
-				frame,
-				name;
-			this.imgPos = [0, 0];
-			this.actions = {};
-			for (var rawAction of rawActions) {
-				name = rawAction['name'];
-				frame = rawAction['frame'];
-				this.actions[name] = {name: name, startIndex: startIndex, frame: frame};
-				startIndex += frame;
-			};
 			this.oAct = this.actions['standR'];
 			this.faceTo = 'R';
-			this.pushSpeed = 5;
-			console.log(this.actions)
+			console.log(this.oAct)
 		},
 
 		detectInShade: function() {
@@ -853,7 +884,6 @@
 				if (grid) {
 					this.X = grid.X + tileSize;
 				} else if (nOfChests > 1) {
-					// this.restorePosition(dir);
 					chest = chests[0];
 					this.X = chest.X + chest.width;
 				} else if (nOfChests == 1) {
@@ -861,11 +891,10 @@
 					if (this.X < chest.X + chest.width) {
 						this.X = chest.X + chest.width;
 					};
-					this.processOrder('pushBox', {faceTo: 'L', dir: 'left', distance: pushSpeed, interObj: chests[0]});
+					this.processOrder('pushBox', {faceTo: 'L', dir: 'left', interObj: chests[0]});
 				} else {
 					this.processOrder('walk', {faceTo: 'L'});
 				};
-				// this.prePosition.X = this.X;
 			};
 			if (right) {
 				if (up || down) {
@@ -879,7 +908,6 @@
 				if (grid) {
 					this.X = grid.X - this.width;
 				} else if (nOfChests > 1) {
-					// this.restorePosition(dir);
 					var chest = chests[0];
 					this.X = chest.X - this.width;
 				} else if (nOfChests == 1) {
@@ -887,11 +915,10 @@
 					if (this.X > chest.X - this.width) {
 						this.X = chest.X - this.width;
 					};
-					this.processOrder('pushBox', {faceTo: 'R', dir: 'right', distance: pushSpeed, interObj: chests[0]});
+					this.processOrder('pushBox', {faceTo: 'R', dir: 'right', interObj: chests[0]});
 				} else {
 					this.processOrder('walk', {faceTo: 'R'});
 				};
-				// this.prePosition.X = this.X;
 			};
 			if (up) {
 				if (left || right) {
@@ -905,7 +932,6 @@
 				if (grid) {
 					this.Y = grid.Y + tileSize;
 				} else if (nOfChests > 1) {
-					// this.restorePosition(dir);
 					var chest = chests[0];
 					this.Y = chest.Y + chest.height;
 				} else if (nOfChests == 1) {
@@ -913,11 +939,10 @@
 					if (this.Y < chest.Y + chest.height) {
 						this.Y = chest.Y + chest.height;
 					};
-					this.processOrder('pushBox', {dir: 'up', distance: pushSpeed, interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'up', interObj: chests[0]});
 				} else {
 					this.processOrder('walk', {});
 				};
-				// this.prePosition.Y = this.Y;
 			};
 			if (down) {
 				if (left || right) {
@@ -931,7 +956,6 @@
 				if (grid) {
 					this.Y = grid.Y - this.height;
 				} else if (nOfChests > 1) {
-					// this.restorePosition(dir);
 					var chest = chests[0];
 					this.Y = chest.Y - this.height;
 				} else if (nOfChests == 1) {
@@ -939,11 +963,10 @@
 					if (this.Y > chest.Y - this.height) {
 						this.Y = chest.Y - this.height;
 					};
-					this.processOrder('pushBox', {dir: 'down', distance: pushSpeed, interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'down', interObj: chests[0]});
 				} else {
 					this.processOrder('walk', {});
 				};
-				// this.prePosition.Y = this.Y;
 			};
 			if (!(up || down || left || right)) {
 				var name = this.oAct.name,
@@ -952,13 +975,19 @@
 				if (act !== 'play') {
 					this.processOrder('stand', {});
 				};
-				// console.log(name, this.curFrameIndex);
 			};
 		}
 	};
 
 	var Chest = {
-		friction: -4,
+		// friction: -4,
+		easing: 0.5,
+		imgPos: [0, 64],
+		rawActions: [
+			{name: "stand", frame: 1},
+			{name: "inPlace", frame: 2},
+			{name: "onRect", frame: 1}
+		],
 		box: {
 			marginLeft: 0,
 			marginRight: 0,
@@ -967,16 +996,20 @@
 		},
 
 		init: function() {
-			this.imgPos = [0, 64];
+			this.arrive = true;
+			this.nextX = this.X;
+			this.nextY = this.Y;
+			this.nextMapGridX = this.mapGridX;
+			this.nextMapGridY = this.mapGridY;
+			this.oAct = this.actions['stand'];
 		},
 
 		animate: function() {
 			this.calculateCoor();
 		},
-
+		/*
 		calculateCoor: function() {
-			var // prePosition = this.prePosition,
-				interGrid,
+			var	interGrid,
 				interChest,
 				dir = this.dir;
 			if (dir && this.speed) {
@@ -992,13 +1025,7 @@
 							} else if (interChestLen) {
 								this.Y = interChest[0].Y + interChest[0].height;
 							}
-							// if (interGrid || interChest) {
-							// 	// this.restorePosition(dir);
-							// 	// this.speed = 0;
-							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
-							// }
 							this.speed += this.friction;
-							// this.prePosition.Y = this.Y;
 						} else {
 							this.dir = '';
 						};
@@ -1014,13 +1041,7 @@
 							} else if (interChestLen) {
 								this.Y = interChest[0].Y - this.height;
 							}
-							// if (interGrid || interChest) {
-							// 	// this.restorePosition(dir);
-							// 	// this.speed = 0;
-							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
-							// }
 							this.speed += this.friction;
-							// this.prePosition.Y = this.Y;
 						} else {
 							this.dir = '';
 						};
@@ -1036,13 +1057,7 @@
 							} else if (interChestLen) {
 								this.X = interChest[0].X + interChest[0].width;
 							}
-							// if (interGrid || interChest) {
-							// 	// this.restorePosition(dir);
-							// 	// this.speed = 0;
-							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
-							// }
 							this.speed += this.friction;
-							// this.prePosition.X = this.X;
 						} else {
 							this.dir = '';
 						};
@@ -1058,31 +1073,207 @@
 							} else if (interChestLen) {
 								this.X = interChest[0].X - this.width;
 							}
-							// if (interGrid || interChest) {
-							// 	// this.restorePosition(dir);
-							// 	// this.speed = 0;
-							// 	// game.man.restorePosition(dir);//can't not prevent overlap on the edge
-							// }
 							this.speed += this.friction;
-							// this.prePosition.X = this.X;
 						} else {
 							this.dir = '';
 						};
 						break;
 				}
 			}
+		},*/
+
+		calculateCoor: function() {
+			var	interGrid,
+				interChest,
+				interChestLen,
+				nextMapGridX,
+				nextMapGridY,
+				vx,
+				vy;
+			if (this.dir) {
+				switch (this.dir) {
+					case 'up':
+						nextMapGridY = this.mapGridY - 1;
+						nextMapGridX = this.mapGridX;
+						nextGrid = {mapGridX: nextMapGridX, mapGridY: nextMapGridY};
+						if (this.arrive == true) {
+							interGrid = wallOnGrid(nextGrid);
+							interChest = chestOnGrid(nextGrid);
+							if (!interGrid && !interChest) {
+								this.nextMapGridY = nextMapGridY;
+								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
+								this.arrive = false;
+								this.processOrder('stand');
+							} else {
+								break;
+							};
+						};
+						vy = Math.abs(this.Y - this.nextY) * this.easing;
+						this.Y -= vy;
+						if (this.Y - 0.2 <= this.nextY) {
+							this.mapGridY = this.nextMapGridY;
+							this.Y = this.nextY;
+							this.arrive = true;
+							this.updateOnRect();
+							checkAllInPlace();
+							this.dir = '';
+						};
+						this.processOrder('stand');
+						break;
+					case 'down':
+						nextMapGridY = this.mapGridY + 1;
+						nextMapGridX = this.mapGridX;
+						nextGrid = {mapGridX: nextMapGridX, mapGridY: nextMapGridY};
+						if (this.arrive == true) {
+							interGrid = wallOnGrid(nextGrid);
+							interChest = chestOnGrid(nextGrid);
+							if (!interGrid && !interChest) {
+								this.nextMapGridY = nextMapGridY;
+								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
+								this.arrive = false;
+								this.processOrder('stand');
+							} else {
+								break;
+							};
+						};
+						vy = Math.abs(this.Y - this.nextY) * this.easing;
+						this.Y += vy;
+						if (this.Y + 0.2 >= this.nextY) {
+							this.mapGridY = this.nextMapGridY;
+							this.Y = this.nextY;
+							this.arrive = true;
+							this.updateOnRect();
+							checkAllInPlace();
+							this.dir = '';
+						};
+						this.processOrder('stand');
+						break;
+					case 'left':
+						nextMapGridX = this.mapGridX - 1;
+						nextMapGridY = this.mapGridY;
+						nextGrid = {mapGridX: nextMapGridX, mapGridY: nextMapGridY};
+						if (this.arrive == true) {
+							interGrid = wallOnGrid(nextGrid);
+							interChest = chestOnGrid(nextGrid);
+							if (!interGrid && !interChest) {
+								this.nextMapGridX = nextMapGridX;
+								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
+								this.arrive = false;
+								this.processOrder('stand');
+							} else {
+								break;
+							};
+						};
+						vx = Math.abs(this.X - this.nextX) * this.easing;
+						this.X -= vx;
+						if (this.X - 0.2 <= this.nextX) {
+							this.mapGridX = this.nextMapGridX;
+							this.X = this.nextX;
+							this.arrive = true;
+							this.updateOnRect();
+							checkAllInPlace();
+							this.dir = '';
+						};
+						this.processOrder('stand');
+						break;
+					case 'right':
+						nextMapGridX = this.mapGridX + 1;
+						nextMapGridY = this.mapGridY;
+						nextGrid = {mapGridX: nextMapGridX, mapGridY: nextMapGridY};
+						if (this.arrive == true) {
+							interGrid = wallOnGrid(nextGrid);
+							interChest = chestOnGrid(nextGrid);
+							if (!interGrid && !interChest) {
+								this.nextMapGridX = nextMapGridX;
+								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
+								this.arrive = false;
+								this.processOrder('stand');
+							} else {
+								break;
+							};
+						};
+						vx = Math.abs(this.X - this.nextX) * this.easing;
+						this.X += vx;
+						if (this.X + 0.2 >= this.nextX) {
+							this.mapGridX = this.nextMapGridX;
+							this.X = this.nextX;
+							this.arrive = true;
+							this.updateOnRect();
+							checkAllInPlace();
+							this.dir = '';
+						};
+						this.processOrder('stand');
+						break;
+				}
+			} else {
+				if (this.onRect) {
+					if (this.oAct.name == 'onRect') {
+						this.processOrder('onRect');
+					} else {
+						this.processOrder('inPlace');
+					};
+				} else {
+					this.processOrder('stand');
+				};
+			}
 		},
 
 		processOrder: function(order, details) {
+			var startIndex;
 			switch (order) {
 				case 'move':
 					this.dir = details.dir;
-					this.speed = details.distance;
 					break;
-				case 'inplace':
+				case 'stand':
+					if (this.oAct !== order) {
+						this.oAct = this.actions[order];
+						this.curFrameIndex = this.oAct['startIndex'];
+					} else {
+						this.curFrameIndex++;
+						startIndex = this.startIndex;
+						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
+							this.curFrameIndex = startIndex;
+						};
+					};
+				case 'inPlace':
+					if (this.oAct !== order) {
+						this.oAct = this.actions[order];
+						this.curFrameIndex = this.oAct['startIndex'];
+					} else {
+						this.curFrameIndex++;
+						startIndex = this.startIndex;
+						console.log(this.curFrameIndex, startIndex, this.oAct['frame']);
+						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
+							this.processOrder('onRect');
+							console.log(this.oAct.name);
+						};
+					};
+					break;
+				case 'onRect':
+					if (this.oAct !== order) {
+						this.oAct = this.actions[order];
+						this.curFrameIndex = this.oAct['startIndex'];
+					} else {
+						this.curFrameIndex++;
+						startIndex = this.startIndex;
+						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
+							this.curFrameIndex = startIndex;
+						};
+					};
 					break;
 			}
 		},
+
+		updateOnRect:function() {
+			var rects = curLevel.rects;
+			for (var rect of rects) {
+				if (this.mapGridX == rect[0] && this.mapGridY == rect[1]) {
+					this.onRect = true;
+					return;
+				};
+			};
+			this.onRect = false;
+		}
 	};
 
 	var addEvent = function(el, type, fn) {
