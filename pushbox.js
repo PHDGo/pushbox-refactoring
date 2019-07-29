@@ -50,7 +50,6 @@
 				alert('Yay! You have complete this level.');
 				game.running = false;
 			};
-			// console.log('left:', ctrl.left, 'right:', ctrl.right, 'up:', ctrl.up, 'down:', ctrl.down, 'ctrl.dir:', ctrl.dir);
 		},
 
 		draw: function() {
@@ -668,7 +667,6 @@
 			this.actions[name] = {name: name, startIndex: startIndex, frame: frame};
 			startIndex += frame;
 		};
-		console.log(this.actions);
 
 		switch (oProp.type) {
 			case 'human':
@@ -782,8 +780,10 @@
 
 		init: function() {
 			this.oAct = this.actions['standR'];
+			this.nextAct = 'standR';
 			this.faceTo = 'R';
-			console.log(this.oAct)
+			this.processOrder('stand', {});
+			console.log(this.actions, this.oAct);
 		},
 
 		detectInShade: function() {
@@ -814,50 +814,62 @@
 		},
 
 		animate: function() {
-			// console.log(this.oAct);
+			this.alterFrame();
 			this.calculateCoor();
 			this.inShade = this.detectInShade();
 		},
 
 		processOrder:function(order, details) {
-			var startIndex;
+			var startIndex,
+				nextAct;
 			switch (order) {
 				case 'pushBox':
 					details.interObj.processOrder('move', details);
-					details.faceTo = details.faceTo || this.faceTo;
-					var nextAct = 'walk' + details.faceTo;
-					this.alterFrame(nextAct, details);
 					break;
 				case 'stand':
-					details.faceTo = details.faceTo || this.faceTo;
-					var nextAct = 'stand' + details.faceTo;
-					this.alterFrame(nextAct, details);
-					if (Math.random() > 0.99) { this.processOrder('play', {}) };
+					if (details.faceTo) { this.faceTo = details.faceTo }
+					else { details.faceTo = this.faceTo };
+					nextAct = 'stand' + details.faceTo;
+					this.nextAct = nextAct;
+					// console.log(this.nextAct)
+					break;
 				case 'walk':
-					details.faceTo = details.faceTo || this.faceTo;
-					var nextAct = 'walk' + details.faceTo;
-					this.alterFrame(nextAct, details);
+					if (details.faceTo) { this.faceTo = details.faceTo }
+					else { details.faceTo = this.faceTo };
+					nextAct = 'walk' + details.faceTo;
+					this.nextAct = nextAct;
 					break;
 				case 'play':
-					details.faceTo = details.faceTo || this.faceTo;
-					var nextAct = 'play' + details.faceTo;
-					this.alterFrame(nextAct, details);
+					if (details.faceTo) { this.faceTo = details.faceTo }
+					else { details.faceTo = this.faceTo };
+					nextAct = 'play' + details.faceTo;
+					this.nextAct = nextAct;
 					break;
 			}
 		},
 
-		alterFrame: function(nextAct, details) {
-			var startIndex;
-			if (this.oAct.name !== nextAct) {
-				this.oAct = this.actions[nextAct];
-				this.faceTo = details.faceTo;
-				this.curFrameIndex = this.oAct.startIndex;
-			} else {
-				this.curFrameIndex++;
-				startIndex = this.oAct.startIndex;
-				if (this.curFrameIndex >= startIndex + this.oAct.frame) {
-					this.curFrameIndex = startIndex;
+		alterFrame: function() {
+			var nextAct = this.nextAct,
+				oAct = this.oAct,
+				act = oAct.name,
+				step = 1,
+				startIndex;
+			if (act == nextAct) {
+				startIndex = oAct.startIndex;
+				if (Math.random() > 0.99) { this.processOrder('play', {}) };
+				if (act == 'standL' || act == 'standR') { step = Math.random() > 0.5 ? 0 : 1 };
+				this.curFrameIndex += step;
+				if (this.curFrameIndex >= startIndex + oAct.frame) {
+					if (act == 'playL' || act == 'playR') {
+						this.processOrder('stand', {});
+					} else {
+						this.curFrameIndex = startIndex;
+					};
 				};
+			} else {
+				console.log(act, nextAct);
+				this.oAct = this.actions[nextAct];
+				this.curFrameIndex = this.oAct['startIndex'];
 			};
 		},
 
@@ -873,6 +885,7 @@
 				nOfChests,
 				chest;
 			if (left) {
+				this.processOrder('walk', {faceTo: 'L'});
 				if (up || down) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -891,12 +904,11 @@
 					if (this.X < chest.X + chest.width) {
 						this.X = chest.X + chest.width;
 					};
-					this.processOrder('pushBox', {faceTo: 'L', dir: 'left', interObj: chests[0]});
-				} else {
-					this.processOrder('walk', {faceTo: 'L'});
+					this.processOrder('pushBox', {dir: 'left', interObj: chests[0]});
 				};
 			};
 			if (right) {
+				this.processOrder('walk', {faceTo: 'R'});
 				if (up || down) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -915,12 +927,11 @@
 					if (this.X > chest.X - this.width) {
 						this.X = chest.X - this.width;
 					};
-					this.processOrder('pushBox', {faceTo: 'R', dir: 'right', interObj: chests[0]});
-				} else {
-					this.processOrder('walk', {faceTo: 'R'});
+					this.processOrder('pushBox', {dir: 'right', interObj: chests[0]});
 				};
 			};
 			if (up) {
+				this.processOrder('walk', {});
 				if (left || right) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -940,11 +951,10 @@
 						this.Y = chest.Y + chest.height;
 					};
 					this.processOrder('pushBox', {dir: 'up', interObj: chests[0]});
-				} else {
-					this.processOrder('walk', {});
 				};
 			};
 			if (down) {
+				this.processOrder('walk', {});
 				if (left || right) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -964,17 +974,10 @@
 						this.Y = chest.Y - this.height;
 					};
 					this.processOrder('pushBox', {dir: 'down', interObj: chests[0]});
-				} else {
-					this.processOrder('walk', {});
 				};
 			};
 			if (!(up || down || left || right)) {
-				var name = this.oAct.name,
-					len = name.length,
-					act = name.slice(0, len - 1);
-				if (act !== 'play') {
-					this.processOrder('stand', {});
-				};
+				this.processOrder('stand', {});
 			};
 		}
 	};
@@ -1002,9 +1005,16 @@
 			this.nextMapGridX = this.mapGridX;
 			this.nextMapGridY = this.mapGridY;
 			this.oAct = this.actions['stand'];
+			this.nextAct = 'stand';
+			this.onRect = false;
+			this.updateOnRect();
+			if (this.onRect) {
+				this.processOrder('onRect');
+			};
 		},
 
 		animate: function() {
+			this.alterFrame();
 			this.calculateCoor();
 		},
 		/*
@@ -1103,8 +1113,8 @@
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
 								this.arrive = false;
-								this.processOrder('stand');
 							} else {
+								this.dir = '';
 								break;
 							};
 						};
@@ -1115,10 +1125,13 @@
 							this.Y = this.nextY;
 							this.arrive = true;
 							this.updateOnRect();
-							checkAllInPlace();
+							if (this.onRect) {
+								this.processOrder('inPlace');
+							} else {
+								this.processOrder('stand');
+							};
 							this.dir = '';
 						};
-						this.processOrder('stand');
 						break;
 					case 'down':
 						nextMapGridY = this.mapGridY + 1;
@@ -1131,8 +1144,8 @@
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
 								this.arrive = false;
-								this.processOrder('stand');
 							} else {
+								this.dir = '';
 								break;
 							};
 						};
@@ -1143,10 +1156,13 @@
 							this.Y = this.nextY;
 							this.arrive = true;
 							this.updateOnRect();
-							checkAllInPlace();
+							if (this.onRect) {
+								this.processOrder('inPlace');
+							} else {
+								this.processOrder('stand');
+							};
 							this.dir = '';
 						};
-						this.processOrder('stand');
 						break;
 					case 'left':
 						nextMapGridX = this.mapGridX - 1;
@@ -1159,8 +1175,8 @@
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
 								this.arrive = false;
-								this.processOrder('stand');
 							} else {
+								this.dir = '';
 								break;
 							};
 						};
@@ -1171,10 +1187,13 @@
 							this.X = this.nextX;
 							this.arrive = true;
 							this.updateOnRect();
-							checkAllInPlace();
+							if (this.onRect) {
+								this.processOrder('inPlace');
+							} else {
+								this.processOrder('stand');
+							};
 							this.dir = '';
 						};
-						this.processOrder('stand');
 						break;
 					case 'right':
 						nextMapGridX = this.mapGridX + 1;
@@ -1187,8 +1206,8 @@
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
 								this.arrive = false;
-								this.processOrder('stand');
 							} else {
+								this.dir = '';
 								break;
 							};
 						};
@@ -1199,23 +1218,16 @@
 							this.X = this.nextX;
 							this.arrive = true;
 							this.updateOnRect();
-							checkAllInPlace();
+							if (this.onRect) {
+								this.processOrder('inPlace');
+							} else {
+								this.processOrder('stand');
+							};
 							this.dir = '';
 						};
-						this.processOrder('stand');
 						break;
-				}
-			} else {
-				if (this.onRect) {
-					if (this.oAct.name == 'onRect') {
-						this.processOrder('onRect');
-					} else {
-						this.processOrder('inPlace');
-					};
-				} else {
-					this.processOrder('stand');
 				};
-			}
+			};
 		},
 
 		processOrder: function(order, details) {
@@ -1225,43 +1237,36 @@
 					this.dir = details.dir;
 					break;
 				case 'stand':
-					if (this.oAct !== order) {
-						this.oAct = this.actions[order];
-						this.curFrameIndex = this.oAct['startIndex'];
-					} else {
-						this.curFrameIndex++;
-						startIndex = this.startIndex;
-						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
-							this.curFrameIndex = startIndex;
-						};
-					};
+					this.nextAct = 'stand';
+					break;
 				case 'inPlace':
-					if (this.oAct !== order) {
-						this.oAct = this.actions[order];
-						this.curFrameIndex = this.oAct['startIndex'];
-					} else {
-						this.curFrameIndex++;
-						startIndex = this.startIndex;
-						console.log(this.curFrameIndex, startIndex, this.oAct['frame']);
-						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
-							this.processOrder('onRect');
-							console.log(this.oAct.name);
-						};
-					};
+					this.nextAct = 'inPlace';
 					break;
 				case 'onRect':
-					if (this.oAct !== order) {
-						this.oAct = this.actions[order];
-						this.curFrameIndex = this.oAct['startIndex'];
-					} else {
-						this.curFrameIndex++;
-						startIndex = this.startIndex;
-						if (this.curFrameIndex >= startIndex + this.oAct['frame']) {
-							this.curFrameIndex = startIndex;
-						};
-					};
+					this.nextAct = 'onRect';
 					break;
 			}
+		},
+
+		alterFrame:function() {
+			var nextAct = this.nextAct,
+				oAct = this.oAct,
+				act = oAct.name,
+				startIndex;
+			if (act == nextAct) {
+				startIndex = oAct.startIndex;
+				this.curFrameIndex++;
+				if (this.curFrameIndex >= startIndex + oAct.frame) {
+					if (act == 'inPlace') {
+						this.processOrder('onRect');
+					} else {
+						this.curFrameIndex = startIndex;
+					};
+				};
+			} else {
+				this.oAct = this.actions[nextAct];
+				this.curFrameIndex = this.oAct['startIndex'];
+			};
 		},
 
 		updateOnRect:function() {
