@@ -10,7 +10,7 @@
 		levelFinished = false,
 		canvasW = 0,
 		canvasH = 0,
-		levelN = 0,
+		levelN = 5,
 		counter = 0,
 		tileSize = 32,
 		imgGridWidth = 30,
@@ -821,7 +821,8 @@
 
 		processOrder:function(order, details) {
 			var startIndex,
-				nextAct;
+				nextAct,
+				oAct;
 			switch (order) {
 				case 'pushBox':
 					details.interObj.processOrder('move', details);
@@ -831,7 +832,12 @@
 					else { details.faceTo = this.faceTo };
 					nextAct = 'stand' + details.faceTo;
 					this.nextAct = nextAct;
-					// console.log(this.nextAct)
+					// Last frame of play actions is out of range, amend it
+					oAct = this.oAct.name;
+					if (oAct == 'playL' || oAct == 'playR') {
+						this.oAct = this.actions[nextAct];
+						this.curFrameIndex = this.oAct['startIndex'];
+					};
 					break;
 				case 'walk':
 					if (details.faceTo) { this.faceTo = details.faceTo }
@@ -856,7 +862,6 @@
 				startIndex;
 			if (act == nextAct) {
 				startIndex = oAct.startIndex;
-				if (Math.random() > 0.99) { this.processOrder('play', {}) };
 				if (act == 'standL' || act == 'standR') { step = Math.random() > 0.5 ? 0 : 1 };
 				this.curFrameIndex += step;
 				if (this.curFrameIndex >= startIndex + oAct.frame) {
@@ -867,7 +872,6 @@
 					};
 				};
 			} else {
-				console.log(act, nextAct);
 				this.oAct = this.actions[nextAct];
 				this.curFrameIndex = this.oAct['startIndex'];
 			};
@@ -880,12 +884,15 @@
 				down = ctrl.down,
 				speed = this.speed,
 				pushSpeed = this.pushSpeed,
+				act = this.oAct.name,
 				chests,
 				grid,
 				nOfChests,
 				chest;
 			if (left) {
-				this.processOrder('walk', {faceTo: 'L'});
+				if (act !== 'walkL') {
+					this.processOrder('walk', {faceTo: 'L'});
+				};
 				if (up || down) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -908,7 +915,9 @@
 				};
 			};
 			if (right) {
-				this.processOrder('walk', {faceTo: 'R'});
+				if (act !== 'walkR') {
+					this.processOrder('walk', {faceTo: 'R'});
+				};
 				if (up || down) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -931,7 +940,9 @@
 				};
 			};
 			if (up) {
-				this.processOrder('walk', {});
+				if (act !== 'walkL' && act !== 'walkR') {
+					this.processOrder('walk', {});
+				};
 				if (left || right) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -954,7 +965,9 @@
 				};
 			};
 			if (down) {
-				this.processOrder('walk', {});
+				if (act !== 'walkL' && act !== 'walkR') {
+					this.processOrder('walk', {});
+				};
 				if (left || right) {
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
@@ -976,8 +989,14 @@
 					this.processOrder('pushBox', {dir: 'down', interObj: chests[0]});
 				};
 			};
-			if (!(up || down || left || right)) {
-				this.processOrder('stand', {});
+			if (!(up || down || left || right)) { // no keyboard input
+				if (act !== 'standL' && act !== 'standR') { // not standing
+					if (act !== 'playL' && act !== 'playR') { // not playing
+						this.processOrder('stand', {});
+					};
+				} else { // is standing
+					if (Math.random() > 0.99) { this.processOrder('play', {}) }; // random waiting action
+				};
 			};
 		}
 	};
