@@ -3,22 +3,23 @@
 	var botCtx = null,
 		stageCtx = null,
 		topCtx = null,
-		gameStart = false,
+		running = false,
 		musicOn = true,
 		pause = false,
-		pullingBack = true,
-		levelFinished = false,
+		canPullBack = false,
+		needPanning = true,
+		weather = false,
 		canvasW = 0,
 		canvasH = 0,
 		levelN = 0,
-		counter = 0,
 		tileSize = 32,
 		imgGridWidth = 30,
 		animationTimeOut = 100,
 		rectTile = [352, 288],
 		chestList = [],
 		beingList = [],
-		curLevel = {};
+		curLevel = {},
+		lastStatus = {};
 
 	var game = {
 		botCanvas: document.getElementById('bot-canvas'),
@@ -40,23 +41,37 @@
 		init: function() {
 			loader.init();
 			map.init();
+			Weather.init();
 			unit.init();
 			ctrl.init();
 		},
 
 		animate: function() {
 			unit.animate();
-			if (game.running && checkAllInPlace()) {
-				alert('Yay! You have complete this level.');
-				game.running = false;
+			if (Weather.weather) {
+				Weather.animate();
+			};
+			Weather.animate();
+			if (running) {
+				game.checkComplish();
 			};
 		},
 
 		draw: function() {
-			clearCanvas();
+			clearCanvas(stageCtx);
+			clearCanvas(topCtx);
+			if (needPanning) {
+				clearCanvas(botCtx);
+				fillContext();
+				map.computeBlock();
+				map.draw();
+			};
 			unit.draw();
+			if (weather) {
+				Weather.draw();
+			};
 			Shader.switchShaders();
-			requestAnimationFrame(game.draw);
+			game.animationFrame = requestAnimationFrame(game.draw);
 		},
 
 		start: function(ev) {
@@ -67,12 +82,12 @@
 			// 	game.bgm.play();
 			// }
 			// gameStart = true;
-			
+			running = true;
 			game.animate();
 			game.animation = setInterval(game.animate, animationTimeOut);
 
-			fillContext();
-			map.draw();
+			map.computeBlock(); // must after unit.init()
+			map.yeildMapImg(); // must after loader.init()
 			game.draw();
 		}
 	};
@@ -81,6 +96,7 @@
 		totalItemCount: 0,
 		loadedItemCount: 0,
 		srcList: [
+			{name:'fog', url:'image/Fog', ext:'.png'},
 			{name:'tileSet', url:'image/tileSet', ext:'.png'},
 			{name:'sprite', url:'image/sprite', ext:'.png'},
 			{name:'UI', url:'image/UI', ext:'.png'},
@@ -94,7 +110,7 @@
 
 		init: function() {
 			var item;
-			for (var i = 0; i < this.srcList.length; i++ ) {
+			for (var i = 0; i < this.srcList.length; i++) {
 				item = this.srcList[i];
 				if (item.ext == '.png') {
 					game[item.name] = this.loadImage(item.url + item.ext);
@@ -102,8 +118,8 @@
 				} else {
 					game[item.name] = this.loadAudio(item.url + item.ext);
 					console.log(item.name + ':'+ item.url + item.ext + '-' + this.loadedItemCount);
-				}
-			}
+				};
+			};
 		},
 
 		loadImage: function(src) {
@@ -140,7 +156,7 @@
 				// showScreen('gameStartScreen');
 			}
 		}
-	};	
+	};
 
 	var ctrl = {
 		left: false,
@@ -151,6 +167,7 @@
 		init: function() {
 			addEvent(window, 'keydown', this.keydown);
 			addEvent(window, 'keyup', this.keyup);
+			addEvent(window, 'keypress', this.pullBack)
 		},
 
 		keydown: function(e) {
@@ -172,6 +189,7 @@
 		},
 
 		keyup: function(e) {
+			e = e || window.event;
 			switch (e.keyCode) {
 				case 37:
 					ctrl.left = false;
@@ -187,14 +205,69 @@
 					break;
 			};
 		},
+
+		pullBack: function(e) {
+			if (!canPullBack) {
+				return;
+			};
+			var lastChest = lastStatus.chest,
+				lastDir = lastStatus.dir,
+				man = game.man,
+				prePosition = lastChest.prePosition;
+			e = e || window.event;
+			if (e.keyCode == 120) {
+				lastChest.mapGridX = prePosition.mapGridX;
+				lastChest.mapGridY = prePosition.mapGridY;
+				lastChest.mapX = lastChest.mapGridX * tileSize + lastChest.box.marginLeft;
+				lastChest.mapY = lastChest.mapGridY * tileSize + lastChest.box.marginUp;
+				switch (lastDir) {
+					case 'up':
+						man.mapY = lastChest.mapY + lastChest.height;
+						man.mapX = lastChest.mapX + man.box.marginLeft;
+						break;
+					case 'down':
+						man.mapY = lastChest.mapY - man.height;
+						man.mapX = lastChest.mapX + man.box.marginLeft;
+						break;
+					case 'left':
+						man.mapX = lastChest.mapX + lastChest.width;
+						man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
+						break;
+					case 'right':
+						man.mapX = lastChest.mapX - man.width;
+						man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
+						break;
+				};
+				lastChest.dir = '';
+				lastChest.arrive = true;
+				needPanning = true;
+				canPullBack = false;
+			};
+		}
 	};
 
 	var map = {
+		canvas: document.createElement('canvas'),
 		init: function() {
+			var GWidth,
+				GHeight;
 			curLevel = this.level[levelN];
+			GWidth = curLevel.mapGridWidth;
+			GHeight = curLevel.mapGridHeight;
+			this.width = GWidth * tileSize;
+			this.height = GHeight * tileSize;
+			this.canvas.width = this.width;
+			this.canvas.height = this.height;
+			this.context = this.canvas.getContext('2d');
+			this.border = {};
+			if (levelN == 0) {
+				game.checkComplish = checkLevelHit;
+			} else {
+				game.checkComplish = checkAllInPlace;
+			};
 		},
 
-		draw: function() {
+		yeildMapImg: function() {
 			var GWidth = curLevel.mapGridWidth,
 				GHeight = curLevel.mapGridHeight,
 				terrain = curLevel.terrain,
@@ -209,30 +282,95 @@
 			for (var i = 0; i < GHeight; i++) {
 				for (var j = 0; j < GWidth; j++) {
 					tileID = terrain[i][j];
-					tileX = (tileID - 1) % imgGridWidth;
-					tileY = Math.floor((tileID - 1) / imgGridWidth);
-					botCtx.drawImage(tileSet, tileX * tileSize, tileY * tileSize, tileSize, tileSize, j * tileSize, i * tileSize, tileSize, tileSize);
-				}
+					if (tileID !== 0) {
+						tileX = (tileID - 1) % imgGridWidth;
+						tileY = Math.floor((tileID - 1) / imgGridWidth);
+						this.context.drawImage(tileSet, tileX * tileSize, tileY * tileSize, tileSize, tileSize, j * tileSize, i * tileSize, tileSize, tileSize);
+					};
+				};
 			};
 
 			for (var i = 0; i < len; i++) {
 				rect = rects[i];
 				tileX = rect[0] * tileSize;
 				tileY = rect[1] * tileSize;
-				botCtx.drawImage(tileSet, rectTile[0], rectTile[1], tileSize, tileSize, tileX, tileY, tileSize, tileSize);
+				this.context.drawImage(tileSet, rectTile[0], rectTile[1], tileSize, tileSize, tileX, tileY, tileSize, tileSize);
 			};
 		},
 
-		// drawRect: function() {
-		// 	var tileSet = game.tileSet,
-		// 		rects = curLevel.rects,
-		// 		rect;
+		computeBlock: function() {
+			var man = game.man;
+			if (ctrl.right) {
+				this.mapBlockX = Math.floor((man.mapX + man.width) / canvasW);
+			} else {
+				this.mapBlockX = Math.floor(man.mapX / canvasW);
+			};
+			if (ctrl.down) {
+				this.mapBlockY = Math.floor((man.mapY + man.height) / canvasH);
+			} else {
+				this.mapBlockY = Math.floor(man.mapY / canvasH);
+			};
+			this.border.left = this.mapBlockX * canvasW;
+			this.border.up = this.mapBlockY * canvasH;
+			this.border.right = this.border.left + canvasW;
+			this.border.down = this.border.up + canvasH;
+			console.log(this.mapBlockX, this.mapBlockY, this.border);
+		},
+		
+		draw: function() {
+			botCtx.drawImage(this.canvas, this.mapBlockX * canvasW, this.mapBlockY * canvasH, canvasW, canvasH, 0, 0, canvasW, canvasH);
+			needPanning = false;
+			// var halfCanvasW = 0.5 * canvasW,
+			// 	halfCanvasH = 0.5 * canvasH,
+			// 	theta1 = mapX + halfCanvasW - mapW,
+			// 	theta2 = mapY + halfCanvasH - mapH,
+			// 	theta3 = mapY - halfCanvasH,
+			// 	theta4 = mapX - halfCanvasW,
+			// 	alpha1 = mapW - halfCanvasW,
+			// 	alpha2 = mapH - halfCanvasH;
 
-		// 	for (var i = 0; i < rects.length; i++) {
-		// 		rect = this.underChest(rects[i]) ? rectUnderChest : odinaryRect;
-		// 		stageCtx.drawImage(tileSet, rect[0], rect[1], 32, 32, rects[i].x * tileSize, rects[i].y * tileSize, tileSize, tileSize);
-		// 	}
-		// },
+			// if (halfCanvasW <= mapX <= alpha1) {
+			// 	if (halfCanvasH <= mapY <= alpha2) {
+			// 		botCtx.drawImage(this.canvas, alpha1, alpha2, canvasW, canvasH, 0, 0, canvasW, canvasH);
+			// 	} else if (0 < theta2 < mapH) {
+			// 		botCtx.drawImage(this.canvas, mapX, mapY, canvasW, canvasH - h, 0, 0, canvasW, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, mapX, 0, canvasW, h, 0, 0, canvasW, h);
+			// 	} else if (-canvasH < theta3 < 0) {
+			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW, canvasH - h, 0, h, canvasW, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, theta4, mapH - h, canvasW, h, 0, 0, canvasW, h);
+			// 	};
+			// } else if (0 < theta1 < mapW) {
+			// 	if (halfCanvasH <= mapY <= alpha2) {
+			// 		botCtx.drawImage(this.canvas, theta4, theta3, canvasW - w, canvasH, 0, 0, canvasW - w, canvasH);
+			// 		botCtx.drawImage(this.canvas, 0, theta3, W, canvasH, canvasW - w, 0, w, canvasH);							
+			// 	} else if (0 < theta2 < mapH) {
+			// 		botCtx.drawImage(this.canvas, theta4, theta3, canvasW - w, canvasH - h, 0, 0, canvasW - w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, 0, theta3, w, canvasH - h, canvasW - w, 0, w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW - w, h, 0, canvasH - h, canvasw - w, h);
+			// 		botCtx.drawImage(this.canvas, 0, 0, w, h, canvasW - w, canvasH - h, w, h);
+			// 	} else if (-canvasH < theta3 < 0) {
+			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW - w, canvasH - h, 0, h, canvasW - w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, theta4, mapH - h, canvasW - w, h, 0, 0, canvasW - w, h);
+			// 		botCtx.drawImage(this.canvas, 0, 0, w, canvasH - h, canvasW - w, 0, w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, 0, mapH - h, w, h, canvasW - w, 0, w, h);
+			// 	};
+			// } else if (-canvasW < theta4 < 0) {
+			// 	if (halfCanvasH <= mapY <= alpha2) {
+			// 		botCtx.drawImage(this.canvas, 0, theta3, mapW - w, mapH, canvasW - w, 0, mapW - w, mapH);
+			// 		botCtx.drawImage(this.canvas, mapW - w, theta3, w, canvasH, 0, 0, w, canvasH);
+			// 	} else if (-canvasH < theta3 < 0) {
+			// 		botCtx.drawImage(this.canvas, 0, 0, canvasW - w, canvasH - h, w, h, canvasW - w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, 0, w, canvasW - w, h, w, 0, canvasW - w, h);
+			// 		botCtx.drawImage(this.canvas, mapW - w, 0, w, mapH - h, 0, h, w, mapH - h);
+			// 		botCtx.drawImage(this.canvas, mapW - w, mapH - h, w, h, 0, 0, w, h);
+			// 	} else if (0 < theta2 < mapH) {
+			// 		botCtx.drawImage(this.canvas, 0, theta3, canvasW - w, canvasH - h, w, 0, canvasW - w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, mapW - w, theta3, w, canvasH - h, 0, 0, w, canvasH - h);
+			// 		botCtx.drawImage(this.canvas, 0, 0, canvasW - w, h, w, canvasH - h, canvasW - w, h);
+			// 		botCtx.drawImage(this.canvas, mapW - w, 0, w, h, canvasH - h, 0, w, h);
+			// 	};
+			// };
+		},
 
 		"level": [
 			// {
@@ -279,73 +417,31 @@
 			// },
 			{
 				"mapName": "room0",
-				"mapGridWidth":13,
-				"mapGridHeight":12,
-				"born": {x: 6, y: 8},
-				"chests":[[4,4],[8,4],[6,5]],
+				"mapGridWidth": 26,
+				"mapGridHeight": 12,
+				"born": {x: 19, y: 8},
+				"chests": [[17,3],[21,3],[19,5]],
 				"chestImgPos": [0, 64],
-				"rects":[[6,3],[6,4]],
+				"rects": [[19,2],[19,3]],
 				"torches": [],
 				"mapObstructedTerrain":[],
 				"terrain":[
-					[211,273,211,211,211,272,211,211,211,211,211,211,211],
-					[273,211,211,273,211,211,211,211,272,211,273,211,211],
-					[211,211,273,211,211,263,222,262,211,211,211,273,211],
-					[211,272,211,211,211,225,229,218,273,211,211,211,273],
-					[273,273,272,211,279,226,231,218,277,272,272,272,272],
-					[272,272,211,272,211,261,220,260,273,211,273,273,275],
-					[211,211,277,272,273,211,279,272,272,272,273,272,273],
-					[273,273,272,272,272,272,272,272,272,273,272,273,273],
-					[272,211,272,272,272,272,273,274,273,263,262,211,272],
-					[273,272,273,272,273,272,273,272,272,261,260,273,272],
-					[273,272,272,273,273,273,272,272,272,273,272,272,272],
-					[211,274,272,273,273,272,273,273,211,274,272,273,273]
+					[275,272,272,272,272,272,273,273,273,272,273,211,272,273,211,211,273,211,211,211,211,272,211,273,211,211],
+					[272,272,272,273,273,273,272,272,272,272,273,273,273,211,211,273,211,211,263,222,262,211,211,211,273,211],
+					[272,272,272,273,273,273,273,273,273,272,211,211,273,211,272,211,211,211,225,229,218,273,211,211,211,273],
+					[272,272,273,273,272,273,273,273,273,273,211,211,273,273,273,272,211,279,226,231,218,277,272,272,272,272],
+					[272,272,273,273,211,273,211,273,273,273,211,211,273,272,272,211,272,211,261,220,260,273,211,273,273,275],
+					[272,272,272,273,273,273,211,273,272,273,211,211,273,211,211,277,272,273,211,279,272,272,272,273,272,273],
+					[272,211,272,273,273,273,273,273,272,273,211,211,273,273,273,272,272,272,272,272,272,272,273,272,273,273],
+					[272,273,273,274,273,273,211,273,273,273,211,273,273,272,211,272,272,272,272,273,274,273,263,262,211,272],
+					[272,273,211,272,211,272,273,273,272,273,211,273,272,273,272,273,272,273,272,273,272,272,261,260,273,272],
+					[211,273,273,272,211,211,211,272,273,273,273,273,272,273,272,272,273,273,273,272,272,272,273,272,272,272],
+					[272,272,273,273,272,272,272,272,273,273,273,273,272,211,274,272,273,273,272,273,273,211,274,272,273,273],
+					[272,272,272,273,273,273,272,273,272,272,273,211,273,272,272,273,272,273,272,273,272,272,273,273,272,272]
 				],
-				"shade":{}
+				"shade":{},
+				"weather": 'fog'
 			},
-			// {
-			// 	"mapName": "easiest",
-			// 	"mapGridWidth":13,
-			// 	"mapGridHeight":12,
-			// 	"born": {x: 7, y: 6},
-			// 	"chests":[[6,5],[5,6],[8,6],[7,7]],
-			// 	"rects":[[6,4],[4,6],[9,6],[7,8]],
-			// 	"torches":[[8, 4]],
-			// 	"mapObstructedTerrain":[[5,1],[6,1],[7,1],[5,2],[6,2],[7,2],[3,3],[4,3],[5,3],[6,3],[7,3],[8,3],[9,3],[10,3],[3,4],[4,4],[5,4],[7,4],[8,4],[9,4],[10,4],[3,5],[4,5],[5,5],[7,5],[8,5],[9,5],[10,5],[3,6],[10,6],[3,7],[4,7],[5,7],[6,7],[8,7],[9,7],[10,7],[6,8],[8,8],[6,9],[7,9],[8,9]],
-			// 	"terrain":[
-			// 		[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 		[0,0,0,0,0,83,44,82,0,0,0,0,0],
-			// 		[0,0,0,0,0,47,124,38,0,0,0,0,0],
-			// 		[0,0,0,83,43,35,154,34,44,44,82,0,0],
-			// 		[0,0,0,47,123,126,236,121,122,124,38,0,0],
-			// 		[0,0,0,31,123,126,211,151,152,154,38,0,0],
-			// 		[0,0,0,31,236,211,211,211,211,236,31,0,0],
-			// 		[0,0,0,31,31,31,31,278,31,31,31,0,0],
-			// 		[0,0,0,0,0,0,31,211,31,0,0,0,0],
-			// 		[0,0,0,0,0,0,31,31,31,0,0,0,0],
-			// 		[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 		[0,0,0,0,0,0,0,0,0,0,0,0,0]
-			// 	],
-			// 	"shade":{
-			// 		"shade0":{
-			// 			"shadeData":[[3,5],[4,5],[5,5],[6,5],[8,5],[9,5],[10,5],[4,6],[5,6],[6,6],[8,6],[9,6],[6,7],[7,7],[8,7],[7,8]],
-			// 			"tiles":[
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,81,41,41,33,0,32,41,80,0,0],
-			// 				[0,0,0,0,31,31,47,0,38,31,0,0,0],
-			// 				[0,0,0,0,0,0,81,41,80,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,31,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0],
-			// 				[0,0,0,0,0,0,0,0,0,0,0,0,0]
-			// 			]
-			// 		},
-			// 	}
-			// },
 			{
 				"mapName": "room1",
 				"mapGridWidth":13,
@@ -388,7 +484,8 @@
 							[0,0,0,0,0,0,0,0,0,0,0,0,0]
 						]
 					},
-				}
+				},
+				"weather": ''
 			},
 			{
 				"mapName": "room2",
@@ -432,7 +529,8 @@
 							[0,0,0,0,0,0,0,0,0,0,0,0,0]
 						]
 					},
-				}
+				},
+				"weather": ''
 			},
 			{
 				"mapName": "room3",
@@ -476,7 +574,8 @@
 							[0,0,0,0,0,0,0,0,0,0,0,0,0]
 						]
 					},
-				}
+				},
+				"weather": ''
 			},
 			{
 				"mapName": "room4",
@@ -520,9 +619,33 @@
 							[0,0,0,0,0,0,0,0,0,0,0,0,0]
 						]
 					},
-				}
+				},
+				"weather": ''
 			}
 		]
+	};
+
+	var Weather = {
+		init: function() {
+			if (curLevel.weather) {
+				weather = true;
+				this.X = 0;
+				this.vx = -1;
+			};
+		},
+
+		animate: function() {
+			this.X += this.vx;
+			if (this.X < -canvasW) {
+				this.X = 0;
+			}
+		},
+
+		draw: function() {
+			topCtx.globalAlpha = 0.2;
+			topCtx.drawImage(game.fog, this.X, 0, canvasW, canvasH);
+			topCtx.drawImage(game.fog, this.X + canvasW, 0, canvasW, canvasH);
+		}
 	};
 
 	var Shader = {
@@ -577,7 +700,7 @@
 				oItem;
 
 			for (var mapGridCoor of torches) {
-				oItem = {X: mapGridCoor[0] * tileSize, Y: mapGridCoor[1] * tileSize};
+				oItem = {mapX: mapGridCoor[0] * tileSize, mapY: mapGridCoor[1] * tileSize};
 				torch = Object.assign(oItem, Torch);
 				beingList.push(torch);
 			};
@@ -612,7 +735,6 @@
 			man.init();
 			beingList.push(man);
 			game.man = man;
-			game.running = true;
 		},
 
 		animate: function() {
@@ -625,59 +747,12 @@
 		draw: function() {
 			var sortedBeingList = Object.assign([], beingList);
 			sortedBeingList.sort(function(a, b){
-				return a.Y - b.Y;
+				return a.mapY - b.mapY;
 			});
 			sortedBeingList.forEach(function(being){
 				being.draw();
 			});
 		}
-	};
-
-	var fillContext = function() {
-		botCtx.rect(0, 0, canvasW, canvasH);
-		botCtx.fillStyle = "black";
-		botCtx.fill();
-	};
-
-	var clearCanvas = function() {
-		stageCtx.clearRect(0, 0, canvasW, canvasH);
-		topCtx.clearRect(0, 0, canvasW, canvasH);
-	};
-
-	var showScreen = function(id) {
-		var screen = document.getElementById(id);
-		screen.style.display = 'block';
-	};
-
-	var hideScreen = function (id) {
-		var screen = document.getElementById(id);
-		screen.style.display = 'none';
-	};
-
-	var chestOnGrid = function(grid) {
-		for (var chest of chestList) {
-			if (chest.mapGridX == grid.mapGridX && chest.mapGridY == grid.mapGridY) {
-				return chest;
-			}
-		}
-	};
-
-	var wallOnGrid = function(grid) {
-		var obstructions = curLevel.mapObstructedTerrain;
-		for (var obs of obstructions) {
-			if (grid.mapGridX == obs[0] && grid.mapGridY == obs[1]) {
-				return obs;
-			};
-		};
-	};
-
-	var checkAllInPlace = function() {
-		for (var chest of chestList) {
-			if (!chest.onRect) {
-				return false;
-			};
-		};
-		return true;
 	};
 
 	var boxObj = function(oProp) {
@@ -735,9 +810,9 @@
 		this.mapGridY = oProp.mapGridY;
 		this.pixelOffsetX = offsetX + box['marginLeft'];
 		this.pixelOffsetY = offsetY + box['marginUp'];
-		this.X = this.mapGridX * tileSize + box['marginLeft'];
-		this.Y = this.mapGridY * tileSize + box['marginUp'];
-		this.prePosition = {X: this.X, Y: this.Y};
+		this.mapX = this.mapGridX * tileSize + box['marginLeft'];
+		this.mapY = this.mapGridY * tileSize + box['marginUp'];
+		this.prePosition = {mapGridX: this.mapGridX, mapGridY: this.mapGridY};
 		this.width = tileSize - box.marginLeft - box.marginRight;
 		this.height = tileSize - box.marginUp - box.marginDown;
 
@@ -750,18 +825,21 @@
 
 	var commonFunc = {
 		draw: function(){
-			var frameWidth = this.frameWidth,
+			var border = map.border,
+				frameWidth = this.frameWidth,
 				frameHeight = this.frameHeight,
 				imgPos = this.imgPos,
-				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]];
-			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, this.X - this.pixelOffsetX, this.Y - this.pixelOffsetY, frameWidth, frameHeight);
+				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]],
+				canvasX = this.mapX - this.pixelOffsetX - border.left,
+				canvasY = this.mapY - this.pixelOffsetY - border.up;
+			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, canvasX, canvasY, frameWidth, frameHeight);
 		},
 
 		intersects: function(rectObj) {
-			return !(this.X + this.width <= rectObj.X ||
-					 rectObj.X + rectObj.width <= this.X ||
-					 this.Y + this.height <= rectObj.Y ||
-					 rectObj.Y + rectObj.height <= this.Y
+			return !(this.mapX + this.width <= rectObj.mapX ||
+					 rectObj.mapX + rectObj.width <= this.mapX ||
+					 this.mapY + this.height <= rectObj.mapY ||
+					 rectObj.mapY + rectObj.height <= this.mapY
 					);
 		},
 
@@ -771,8 +849,8 @@
 			for (var i = 0; i < len; i++) {
 				var obs = obstructions[i],
 					grid = {
-						X: obs[0] * tileSize,
-						Y: obs[1] * tileSize,
+						mapX: obs[0] * tileSize,
+						mapY: obs[1] * tileSize,
 						width: tileSize,
 						height: tileSize
 					};
@@ -825,11 +903,11 @@
 		},
 
 		init: function() {
+			var box = this.box;
 			this.oAct = this.actions['standR'];
 			this.nextAct = 'standR';
 			this.faceTo = 'R';
 			this.processOrder('stand', {});
-			console.log(this.actions, this.oAct);
 		},
 
 		detectInShade: function() {
@@ -842,8 +920,8 @@
 				for (var i = 0; i < len; i++) {
 					var obj = data[i],
 						grid = {
-							X: obj[0] * tileSize,
-							Y: obj[1] * tileSize,
+							mapX: obj[0] * tileSize,
+							mapY: obj[1] * tileSize,
 							box: {
 								left: 0,
 								right: 0,
@@ -923,6 +1001,10 @@
 		},
 
 		calculateCoor: function() {
+			if (!running) {
+				return;
+			};
+
 			var left = ctrl.left,
 				right = ctrl.right,
 				up = ctrl.up,
@@ -934,6 +1016,7 @@
 				grid,
 				nOfChests,
 				chest;
+
 			if (left) {
 				if (act !== 'walkL') {
 					this.processOrder('walk', {faceTo: 'L'});
@@ -942,21 +1025,27 @@
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
 				};
-				this.X -= speed;
+				this.mapX -= speed;
+				if (this.mapX < map.border.left) {
+					if (this.mapX < 0) {
+						this.mapX = map.width - this.box.marginLeft;
+					};
+					needPanning = true;
+				};
 				chests = this.intersectWithChest();
 				grid = this.intersectWithWall();
 				nOfChests = chests.length;
 				if (grid) {
-					this.X = grid.X + tileSize;
+					this.mapX = grid.mapX + tileSize;
 				} else if (nOfChests > 1) {
 					chest = chests[0];
-					this.X = chest.X + chest.width;
+					this.mapX = chest.mapX + chest.width;
 				} else if (nOfChests == 1) {
 					chest = chests[0];
-					if (this.X < chest.X + chest.width) {
-						this.X = chest.X + chest.width;
+					if (this.mapX < chest.mapX + chest.width) {
+						this.mapX = chest.mapX + chest.width;
 					};
-					this.processOrder('pushBox', {dir: 'left', interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'left', interObj: chest});
 				};
 			};
 			if (right) {
@@ -967,21 +1056,27 @@
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
 				};
-				this.X += speed;
+				this.mapX += speed;
+				if (this.mapX + this.width > map.border.right) {
+					if (this.mapX + this.width > map.width) {
+						this.mapX = -this.width + this.box.marginRight;
+					};
+					needPanning = true;
+				};
 				chests = this.intersectWithChest();
 				grid = this.intersectWithWall();
 				nOfChests = chests.length;
 				if (grid) {
-					this.X = grid.X - this.width;
+					this.mapX = grid.mapX - this.width;
 				} else if (nOfChests > 1) {
 					var chest = chests[0];
-					this.X = chest.X - this.width;
+					this.mapX = chest.mapX - this.width;
 				} else if (nOfChests == 1) {
 					chest = chests[0];
-					if (this.X > chest.X - this.width) {
-						this.X = chest.X - this.width;
+					if (this.mapX > chest.mapX - this.width) {
+						this.mapX = chest.mapX - this.width;
 					};
-					this.processOrder('pushBox', {dir: 'right', interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'right', interObj: chest});
 				};
 			};
 			if (up) {
@@ -992,21 +1087,27 @@
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
 				};
-				this.Y -= speed;
+				this.mapY -= speed;
+				if (this.mapY < map.border.up) {
+					if (this.mapY < 0) {
+						this.mapY = map.height - this.box.marginUp;
+					};
+					needPanning = true;
+				};
 				chests = this.intersectWithChest();
 				grid = this.intersectWithWall();
 				nOfChests = chests.length;
 				if (grid) {
-					this.Y = grid.Y + tileSize;
+					this.mapY = grid.mapY + tileSize;
 				} else if (nOfChests > 1) {
 					var chest = chests[0];
-					this.Y = chest.Y + chest.height;
+					this.mapY = chest.mapY + chest.height;
 				} else if (nOfChests == 1) {
 					chest = chests[0];
-					if (this.Y < chest.Y + chest.height) {
-						this.Y = chest.Y + chest.height;
+					if (this.mapY < chest.mapY + chest.height) {
+						this.mapY = chest.mapY + chest.height;
 					};
-					this.processOrder('pushBox', {dir: 'up', interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'up', interObj: chest});
 				};
 			};
 			if (down) {
@@ -1017,21 +1118,27 @@
 					speed = this.speed * sin45;
 					pushSpeed = this.pushSpeed * sin45;
 				};
-				this.Y += speed;
+				this.mapY += speed;
+				if (this.mapY + this.height > map.border.down) {
+					if (this.mapY  + this.height > map.height) {
+						this.mapY = -this.height + this.box.marginDown;
+					};
+					needPanning = true;
+				};
 				chests = this.intersectWithChest();
 				grid = this.intersectWithWall();
 				nOfChests = chests.length;
 				if (grid) {
-					this.Y = grid.Y - this.height;
+					this.mapY = grid.mapY - this.height;
 				} else if (nOfChests > 1) {
 					var chest = chests[0];
-					this.Y = chest.Y - this.height;
+					this.mapY = chest.mapY - this.height;
 				} else if (nOfChests == 1) {
 					chest = chests[0];
-					if (this.Y > chest.Y - this.height) {
-						this.Y = chest.Y - this.height;
+					if (this.mapY > chest.mapY - this.height) {
+						this.mapY = chest.mapY - this.height;
 					};
-					this.processOrder('pushBox', {dir: 'down', interObj: chests[0]});
+					this.processOrder('pushBox', {dir: 'down', interObj: chest});
 				};
 			};
 			if (!(up || down || left || right)) { // no keyboard input
@@ -1048,7 +1155,7 @@
 
 	var Chest = {
 		// friction: -4,
-		easing: 0.5,
+		easing: 0.3,
 		rawActions: [
 			{name: "stand", frame: 1},
 			{name: "inPlace", frame: 3},
@@ -1063,14 +1170,15 @@
 
 		init: function() {
 			this.arrive = true;
-			this.nextX = this.X;
-			this.nextY = this.Y;
+			this.nextX = this.mapX;
+			this.nextY = this.mapY;
 			this.nextMapGridX = this.mapGridX;
 			this.nextMapGridY = this.mapGridY;
 			this.oAct = this.actions['stand'];
 			this.nextAct = 'stand';
 			this.onRect = false;
 			this.updateOnRect();
+
 			if (this.onRect) {
 				this.processOrder('onRect');
 			};
@@ -1175,17 +1283,26 @@
 							if (!interGrid && !interChest) {
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
+								this.prePosition.mapGridY = this.mapGridY;
+								this.prePosition.mapGridX = this.mapGridX;
+								lastStatus.chest = this;
+								lastStatus.dir = 'up';
+								canPullBack = true;
 								this.arrive = false;
 							} else {
 								this.dir = '';
 								break;
 							};
 						};
-						vy = Math.abs(this.Y - this.nextY) * this.easing;
-						this.Y -= vy;
-						if (this.Y - 0.2 <= this.nextY) {
+						vy = Math.abs(this.mapY - this.nextY) * this.easing;
+						this.mapY -= vy;
+						if (this.mapY - 1 <= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
-							this.Y = this.nextY;
+							this.mapY = this.nextY;
+							if (this.mapGridY < 0) {
+								this.mapGridY = curLevel.mapGridHeight - 1;
+								this.mapY = this.mapGridY * tileSize + this.box.marginUp;
+							};
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1206,17 +1323,26 @@
 							if (!interGrid && !interChest) {
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
+								this.prePosition.mapGridY = this.mapGridY;
+								this.prePosition.mapGridX = this.mapGridX;
+								lastStatus.chest = this;
+								lastStatus.dir = 'down';
+								canPullBack = true;
 								this.arrive = false;
 							} else {
 								this.dir = '';
 								break;
 							};
 						};
-						vy = Math.abs(this.Y - this.nextY) * this.easing;
-						this.Y += vy;
-						if (this.Y + 0.2 >= this.nextY) {
+						vy = Math.abs(this.mapY - this.nextY) * this.easing;
+						this.mapY += vy;
+						if (this.mapY + 1 >= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
-							this.Y = this.nextY;
+							this.mapY = this.nextY;
+							if (this.mapGridY >= curLevel.mapGridHeight) {
+								this.mapGridY = 0;
+								this.mapY = this.mapGridY * tileSize + this.box.marginUp;
+							};
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1237,17 +1363,26 @@
 							if (!interGrid && !interChest) {
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
+								this.prePosition.mapGridX = this.mapGridX;
+								this.prePosition.mapGridY = this.mapGridY;
+								lastStatus.chest = this;
+								lastStatus.dir = 'left';
+								canPullBack = true;
 								this.arrive = false;
 							} else {
 								this.dir = '';
 								break;
 							};
 						};
-						vx = Math.abs(this.X - this.nextX) * this.easing;
-						this.X -= vx;
-						if (this.X - 0.2 <= this.nextX) {
+						vx = Math.abs(this.mapX - this.nextX) * this.easing;
+						this.mapX -= vx;
+						if (this.mapX - 1 <= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
-							this.X = this.nextX;
+							this.mapX = this.nextX;
+							if (this.mapGridX < 0) {
+								this.mapGridX = curLevel.mapGridWidth - 1;
+								this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
+							};
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1268,17 +1403,26 @@
 							if (!interGrid && !interChest) {
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
+								this.prePosition.mapGridX = this.mapGridX;
+								this.prePosition.mapGridY = this.mapGridY;
+								lastStatus.chest = this;
+								lastStatus.dir = 'right';
+								canPullBack = true;
 								this.arrive = false;
 							} else {
 								this.dir = '';
 								break;
 							};
 						};
-						vx = Math.abs(this.X - this.nextX) * this.easing;
-						this.X += vx;
-						if (this.X + 0.2 >= this.nextX) {
+						vx = Math.abs(this.mapX - this.nextX) * this.easing;
+						this.mapX += vx;
+						if (this.mapX + 1 >= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
-							this.X = this.nextX;
+							this.mapX = this.nextX;
+							if (this.mapGridX >= curLevel.mapGridWidth) {
+								this.mapGridX = 0;
+								this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
+							};
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1360,6 +1504,178 @@
 			};
 		},
 		draw: commonFunc.draw,
+	};
+
+	// var particle = {
+	// 	numFog: 10,
+	// 	fogs: [],
+	// 	init: function() {
+	// 		numFog = this.numFog;
+	// 		for (var fog, i = 0; i < numFog; i++) {
+	// 			fog = new Fog();
+	// 			fog.x = canvasW;
+	// 			fog.Y = Math.random() * canvasH;
+	// 			fog.width = Math.random() * tileSize * 2;
+	// 			fog.height = Math.random() * tileSize;
+	// 			fog.vx = -8 + Math.random() * 5;
+	// 			fog.vy = Math.sin(this.angle) * 4;
+	// 			fog.angle = Math.random() * 10;
+	// 			fog.alpha = Math.random() / 3;
+	// 			this.fogs.push(fog);
+	// 		};
+	// 	},
+
+	// 	animate: function() {
+	// 		this.fogs.forEach(function(fog){
+	// 			fog.animate();
+	// 		});
+	// 	},
+
+	// 	draw: function() {
+	// 		if (levelN !== 0) {
+	// 			return;
+	// 		};
+	// 		this.fogs.forEach(function(fog){
+	// 			fog.draw(topCtx);
+	// 		});
+	// 	}
+	// }
+
+	// var Fog = function() {
+	// 	this.x = 0;
+	// 	this.y = 0;
+	// 	this.vx = 0;
+	// 	this.vy = 0;
+	// 	// this.scaleX = 0;
+	// 	// this.scaleY = 0;
+	// 	this.width = 0;
+	// 	this.height = 0;
+	// 	this.angle = 0;
+	// 	this.alpha = 0;
+	// 	this.color = '#fff';
+	// };
+
+	// Fog.prototype.draw = function(ctx) {
+	// 	ctx.save();
+	// 	ctx.globalAlpha = this.alpha;
+	// 	ctx.translate(this.x, this.y);
+	// 	// ctx.scale(this.scaleX, this.scaleY);
+	// 	ctx.fillStyle = this.color;
+	// 	ctx.fillRect(0, 0, this.width, this.height);
+	// 	ctx.restore();
+	// };
+
+	// Fog.prototype.animate = function() {
+	// 	this.x += this.vx;
+	// 	this.y += this.vy;
+	// 	this.angle += 0.1;
+	// 	this.vy = Math.sin(this.angle) * 4;
+	// 	if (this.x < 0) {
+	// 		this.x = canvasH;
+	// 		this.y = Math.random() * canvasH;
+	// 		this.width = Math.random() * tileSize * 2;
+	// 		this.height = Math.random() * tileSize;
+	// 		this.vx = -1 + Math.random() / 2;
+	// 		this.vy = Math.sin(this.angle) * 0.01;
+	// 		this.angle = Math.random() * 10;
+	// 		this.alpha = Math.random() / 3;
+	// 	};
+	// };
+
+	var fillContext = function() {
+		botCtx.rect(0, 0, canvasW, canvasH);
+		botCtx.fillStyle = "black";
+		botCtx.fill();
+	};
+
+	var clearCanvas = function(ctx) {
+		ctx.clearRect(0, 0, canvasW, canvasH);
+	};
+
+	var showScreen = function(id) {
+		var screen = document.getElementById(id);
+		screen.style.display = 'block';
+	};
+
+	var hideScreen = function (id) {
+		var screen = document.getElementById(id);
+		screen.style.display = 'none';
+	};
+
+	var chestOnGrid = function(grid) {
+		for (var chest of chestList) {
+			if (chest.mapGridX == grid.mapGridX && chest.mapGridY == grid.mapGridY) {
+				return chest;
+			}
+		}
+	};
+
+	var wallOnGrid = function(grid) {
+		var obstructions = curLevel.mapObstructedTerrain;
+		for (var obs of obstructions) {
+			if (grid.mapGridX == obs[0] && grid.mapGridY == obs[1]) {
+				return obs;
+			};
+		};
+	};
+
+	var checkAllInPlace = function() {
+		for (var chest of chestList) {
+			if (!chest.onRect) {
+				return;
+			};
+		};
+		switchLevel(0);
+	};
+
+	var checkLevelHit = function() {
+		if (!running) {
+			return;
+		};
+
+		var rects = curLevel.rects,
+			upRect = rects[0],
+			downRect = rects[1],
+			snakeChest = chestList[0],
+			statueChest = chestList[1],
+			tombChest = chestList[2];
+		
+		if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && statueChest.mapGridX == downRect[0] && statueChest.mapGridY == downRect[1]) {
+			switchLevel(1);
+		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1]) {
+			switchLevel(2);
+		} else if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
+			switchLevel(3);
+		} else if (statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
+			switchLevel(4);
+		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && tombChest.mapGridX == upRect[0] && tombChest.mapGridY == upRect[1]) {
+			switchLevel(5);
+		};
+	};
+
+	var switchLevel = function(num) {
+		running = false;
+		levelN = num;
+		setTimeout(function() {
+			reset();
+			clearInterval(game.animation);
+			cancelAnimationFrame(game.animationFrame);
+			map.init();
+			if (levelN == 0) {
+				particle.init();
+			};
+			unit.init();
+			game.start();
+		}, 1000);
+	};
+
+	var reset = function() {
+		needPanning = true;
+		weather = false;
+		chestList = [];
+		beingList = [];
+		curLevel = null;
+		game.man = null;
 	};
 
 	var addEvent = function(el, type, fn) {
