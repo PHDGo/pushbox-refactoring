@@ -9,6 +9,7 @@
 		canPullBack = false,
 		needPanning = true,
 		weather = false,
+		levelComplish = false,
 		canvasW = 0,
 		canvasH = 0,
 		levelN = 0,
@@ -25,7 +26,6 @@
 		botCanvas: document.getElementById('bot-canvas'),
 		stageCanvas: document.getElementById('stage-canvas'),
 		topCanvas: document.getElementById('top-canvas'),
-		running: false,
 
 		setup: function() {
 			botCtx = this.botCanvas.getContext('2d');
@@ -48,16 +48,22 @@
 
 		animate: function() {
 			unit.animate();
-			if (Weather.weather) {
-				Weather.animate();
-			};
 			Weather.animate();
-			if (running) {
+			if (!levelComplish) {
 				game.checkComplish();
 			};
+			game.lastAnimationTime = Date.now();
 		},
 
 		draw: function() {
+			game.lastDrawTime = Date.now();
+			if (game.lastAnimationTime) {
+				game.drawingInterpolationFactor = 1 - (game.lastDrawTime - game.lastAnimationTime) / animationTimeOut;
+				if (game.drawingInterpolationFactor < 0) {
+					game.drawingInterpolationFactor = 0;
+				};
+			};
+
 			clearCanvas(stageCtx);
 			clearCanvas(topCtx);
 			if (needPanning) {
@@ -71,7 +77,9 @@
 				Weather.draw();
 			};
 			Shader.switchShaders();
-			game.animationFrame = requestAnimationFrame(game.draw);
+			if (running) {
+				game.animationFrame = requestAnimationFrame(game.draw);
+			}
 		},
 
 		start: function(ev) {
@@ -661,9 +669,6 @@
 				};
 				this.drawShaders(shade);
 			}
-			// if (game.pause()) {
-			// 	game.foreforegroundCtx.drawImage(pausedScreen.canvas, 0, 0);
-			// }
 		},
 
 		drawShaders: function(shade) {
@@ -812,12 +817,16 @@
 		this.pixelOffsetY = offsetY + box['marginUp'];
 		this.mapX = this.mapGridX * tileSize + box['marginLeft'];
 		this.mapY = this.mapGridY * tileSize + box['marginUp'];
+		this.lastMapX = this.mapX;
+		this.lastMapY = this.mapY;
 		this.prePosition = {mapGridX: this.mapGridX, mapGridY: this.mapGridY};
 		this.width = tileSize - box.marginLeft - box.marginRight;
 		this.height = tileSize - box.marginUp - box.marginDown;
 
 		this.dir = '';
 		this.speed = oProp.speed;
+		this.lastMovementX = 0;
+		this.lastMovementY = 0;
 		this.curFrameIndex = 0;
 		this.animFrame = 0;
 		this.imgPos = oProp.imgPos;
@@ -829,9 +838,11 @@
 				frameWidth = this.frameWidth,
 				frameHeight = this.frameHeight,
 				imgPos = this.imgPos,
+				drawingInterpolationFactor = game.drawingInterpolationFactor,
 				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]],
-				canvasX = this.mapX - this.pixelOffsetX - border.left,
-				canvasY = this.mapY - this.pixelOffsetY - border.up;
+				canvasX = this.mapX - this.pixelOffsetX - border.left - drawingInterpolationFactor * this.lastMovementX,
+				canvasY = this.mapY - this.pixelOffsetY - border.up - drawingInterpolationFactor * this.lastMovementY;
+
 			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, canvasX, canvasY, frameWidth, frameHeight);
 		},
 
@@ -869,19 +880,6 @@
 			};
 			return interChestList;
 		},
-
-		// restorePosition: function(dir) {
-		// 	switch (dir) {
-		// 		case 'up':
-		// 		case 'down':
-		// 			this.Y = this.prePosition.Y;
-		// 			break;
-		// 		case 'left':
-		// 		case 'right':
-		// 			this.X = this.prePosition.X;
-		// 			break;
-		// 	}
-		// }
 	}
 
 	var Role = {
@@ -1017,130 +1015,6 @@
 				nOfChests,
 				chest;
 
-			if (left) {
-				if (act !== 'walkL') {
-					this.processOrder('walk', {faceTo: 'L'});
-				};
-				if (up || down) {
-					speed = this.speed * sin45;
-					pushSpeed = this.pushSpeed * sin45;
-				};
-				this.mapX -= speed;
-				if (this.mapX < map.border.left) {
-					if (this.mapX < 0) {
-						this.mapX = map.width - this.box.marginLeft;
-					};
-					needPanning = true;
-				};
-				chests = this.intersectWithChest();
-				grid = this.intersectWithWall();
-				nOfChests = chests.length;
-				if (grid) {
-					this.mapX = grid.mapX + tileSize;
-				} else if (nOfChests > 1) {
-					chest = chests[0];
-					this.mapX = chest.mapX + chest.width;
-				} else if (nOfChests == 1) {
-					chest = chests[0];
-					if (this.mapX < chest.mapX + chest.width) {
-						this.mapX = chest.mapX + chest.width;
-					};
-					this.processOrder('pushBox', {dir: 'left', interObj: chest});
-				};
-			};
-			if (right) {
-				if (act !== 'walkR') {
-					this.processOrder('walk', {faceTo: 'R'});
-				};
-				if (up || down) {
-					speed = this.speed * sin45;
-					pushSpeed = this.pushSpeed * sin45;
-				};
-				this.mapX += speed;
-				if (this.mapX + this.width > map.border.right) {
-					if (this.mapX + this.width > map.width) {
-						this.mapX = -this.width + this.box.marginRight;
-					};
-					needPanning = true;
-				};
-				chests = this.intersectWithChest();
-				grid = this.intersectWithWall();
-				nOfChests = chests.length;
-				if (grid) {
-					this.mapX = grid.mapX - this.width;
-				} else if (nOfChests > 1) {
-					var chest = chests[0];
-					this.mapX = chest.mapX - this.width;
-				} else if (nOfChests == 1) {
-					chest = chests[0];
-					if (this.mapX > chest.mapX - this.width) {
-						this.mapX = chest.mapX - this.width;
-					};
-					this.processOrder('pushBox', {dir: 'right', interObj: chest});
-				};
-			};
-			if (up) {
-				if (act !== 'walkL' && act !== 'walkR') {
-					this.processOrder('walk', {});
-				};
-				if (left || right) {
-					speed = this.speed * sin45;
-					pushSpeed = this.pushSpeed * sin45;
-				};
-				this.mapY -= speed;
-				if (this.mapY < map.border.up) {
-					if (this.mapY < 0) {
-						this.mapY = map.height - this.box.marginUp;
-					};
-					needPanning = true;
-				};
-				chests = this.intersectWithChest();
-				grid = this.intersectWithWall();
-				nOfChests = chests.length;
-				if (grid) {
-					this.mapY = grid.mapY + tileSize;
-				} else if (nOfChests > 1) {
-					var chest = chests[0];
-					this.mapY = chest.mapY + chest.height;
-				} else if (nOfChests == 1) {
-					chest = chests[0];
-					if (this.mapY < chest.mapY + chest.height) {
-						this.mapY = chest.mapY + chest.height;
-					};
-					this.processOrder('pushBox', {dir: 'up', interObj: chest});
-				};
-			};
-			if (down) {
-				if (act !== 'walkL' && act !== 'walkR') {
-					this.processOrder('walk', {});
-				};
-				if (left || right) {
-					speed = this.speed * sin45;
-					pushSpeed = this.pushSpeed * sin45;
-				};
-				this.mapY += speed;
-				if (this.mapY + this.height > map.border.down) {
-					if (this.mapY  + this.height > map.height) {
-						this.mapY = -this.height + this.box.marginDown;
-					};
-					needPanning = true;
-				};
-				chests = this.intersectWithChest();
-				grid = this.intersectWithWall();
-				nOfChests = chests.length;
-				if (grid) {
-					this.mapY = grid.mapY - this.height;
-				} else if (nOfChests > 1) {
-					var chest = chests[0];
-					this.mapY = chest.mapY - this.height;
-				} else if (nOfChests == 1) {
-					chest = chests[0];
-					if (this.mapY > chest.mapY - this.height) {
-						this.mapY = chest.mapY - this.height;
-					};
-					this.processOrder('pushBox', {dir: 'down', interObj: chest});
-				};
-			};
 			if (!(up || down || left || right)) { // no keyboard input
 				if (act !== 'standL' && act !== 'standR') { // not standing
 					if (act !== 'playL' && act !== 'playR') { // not playing
@@ -1149,6 +1023,137 @@
 				} else { // is standing
 					if (Math.random() > 0.99) { this.processOrder('play', {}) }; // random waiting action
 				};
+				this.lastMovementX = 0;
+				this.lastMovementY = 0;
+			} else {
+				this.lastMapX = this.mapX;
+				this.lastMapY = this.mapY;
+				if (left) {
+					if (act !== 'walkL') {
+						this.processOrder('walk', {faceTo: 'L'});
+					};
+					if (up || down) {
+						speed = this.speed * sin45;
+						pushSpeed = this.pushSpeed * sin45;
+					};
+					this.mapX -= speed;
+					if (this.mapX < map.border.left) {
+						if (this.mapX < 0) {
+							this.mapX = map.width - this.box.marginLeft;
+						};
+						needPanning = true;
+					};
+					chests = this.intersectWithChest();
+					grid = this.intersectWithWall();
+					nOfChests = chests.length;
+					if (grid) {
+						this.mapX = grid.mapX + tileSize;
+					} else if (nOfChests > 1) {
+						chest = chests[0];
+						this.mapX = chest.mapX + chest.width;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.mapX < chest.mapX + chest.width) {
+							this.mapX = chest.mapX + chest.width;
+						};
+						this.processOrder('pushBox', {dir: 'left', interObj: chest});
+					};
+				};
+				if (right) {
+					if (act !== 'walkR') {
+						this.processOrder('walk', {faceTo: 'R'});
+					};
+					if (up || down) {
+						speed = this.speed * sin45;
+						pushSpeed = this.pushSpeed * sin45;
+					};
+					this.mapX += speed;
+					if (this.mapX + this.width > map.border.right) {
+						if (this.mapX + this.width > map.width) {
+							this.mapX = -this.width + this.box.marginRight;
+						};
+						needPanning = true;
+					};
+					chests = this.intersectWithChest();
+					grid = this.intersectWithWall();
+					nOfChests = chests.length;
+					if (grid) {
+						this.mapX = grid.mapX - this.width;
+					} else if (nOfChests > 1) {
+						var chest = chests[0];
+						this.mapX = chest.mapX - this.width;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.mapX > chest.mapX - this.width) {
+							this.mapX = chest.mapX - this.width;
+						};
+						this.processOrder('pushBox', {dir: 'right', interObj: chest});
+					};
+				};
+				if (up) {
+					if (act !== 'walkL' && act !== 'walkR') {
+						this.processOrder('walk', {});
+					};
+					if (left || right) {
+						speed = this.speed * sin45;
+						pushSpeed = this.pushSpeed * sin45;
+					};
+					this.mapY -= speed;
+					if (this.mapY < map.border.up) {
+						if (this.mapY < 0) {
+							this.mapY = map.height - this.box.marginUp;
+						};
+						needPanning = true;
+					};
+					chests = this.intersectWithChest();
+					grid = this.intersectWithWall();
+					nOfChests = chests.length;
+					if (grid) {
+						this.mapY = grid.mapY + tileSize;
+					} else if (nOfChests > 1) {
+						var chest = chests[0];
+						this.mapY = chest.mapY + chest.height;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.mapY < chest.mapY + chest.height) {
+							this.mapY = chest.mapY + chest.height;
+						};
+						this.processOrder('pushBox', {dir: 'up', interObj: chest});
+					};
+				};
+				if (down) {
+					if (act !== 'walkL' && act !== 'walkR') {
+						this.processOrder('walk', {});
+					};
+					if (left || right) {
+						speed = this.speed * sin45;
+						pushSpeed = this.pushSpeed * sin45;
+					};
+					this.mapY += speed;
+					if (this.mapY + this.height > map.border.down) {
+						if (this.mapY  + this.height > map.height) {
+							this.mapY = -this.height + this.box.marginDown;
+						};
+						needPanning = true;
+					};
+					chests = this.intersectWithChest();
+					grid = this.intersectWithWall();
+					nOfChests = chests.length;
+					if (grid) {
+						this.mapY = grid.mapY - this.height;
+					} else if (nOfChests > 1) {
+						var chest = chests[0];
+						this.mapY = chest.mapY - this.height;
+					} else if (nOfChests == 1) {
+						chest = chests[0];
+						if (this.mapY > chest.mapY - this.height) {
+							this.mapY = chest.mapY - this.height;
+						};
+						this.processOrder('pushBox', {dir: 'down', interObj: chest});
+					};
+				};
+				this.lastMovementX = this.mapX - this.lastMapX;
+				this.lastMovementY = this.mapY - this.lastMapY;
 			};
 		}
 	};
@@ -1272,6 +1277,8 @@
 				vx,
 				vy;
 			if (this.dir) {
+				this.lastMapX = this.mapX;
+				this.lastMapY = this.mapY;
 				switch (this.dir) {
 					case 'up':
 						nextMapGridY = this.mapGridY - 1;
@@ -1434,6 +1441,11 @@
 						};
 						break;
 				};
+				this.lastMovementX = this.mapX - this.lastMapX;
+				this.lastMovementY = this.mapY - this.lastMapY;
+			} else {
+				this.lastMovementX = 0;
+				this.lastMovementY = 0;
 			};
 		},
 
@@ -1495,6 +1507,8 @@
 		curFrameIndex: 0,
 		pixelOffsetX: 0,
 		pixelOffsetY: 0,
+		lastMovementX: 0,
+		lastMovementY: 0,
 
 		animate: function() {
 			var step = Math.random() > 0.5 ? 0 : 1;
@@ -1625,14 +1639,11 @@
 				return;
 			};
 		};
+		levelComplish = true;
 		switchLevel(0);
 	};
 
 	var checkLevelHit = function() {
-		if (!running) {
-			return;
-		};
-
 		var rects = curLevel.rects,
 			upRect = rects[0],
 			downRect = rects[1],
@@ -1641,28 +1652,34 @@
 			tombChest = chestList[2];
 		
 		if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && statueChest.mapGridX == downRect[0] && statueChest.mapGridY == downRect[1]) {
+			levelComplish = true;
 			switchLevel(1);
 		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1]) {
+			levelComplish = true;
 			switchLevel(2);
 		} else if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
+			levelComplish = true;
 			switchLevel(3);
 		} else if (statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
+			levelComplish = true;
 			switchLevel(4);
 		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && tombChest.mapGridX == upRect[0] && tombChest.mapGridY == upRect[1]) {
+			levelComplish = true;
 			switchLevel(5);
 		};
 	};
 
 	var switchLevel = function(num) {
-		running = false;
-		levelN = num;
 		setTimeout(function() {
+			running = false;
+			levelComplish = false;
+			levelN = num;
 			reset();
 			clearInterval(game.animation);
 			cancelAnimationFrame(game.animationFrame);
 			map.init();
 			if (levelN == 0) {
-				particle.init();
+				weather = true;
 			};
 			unit.init();
 			game.start();
