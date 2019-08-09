@@ -15,3 +15,27 @@ canvas {
 	top: 0;
 	left: 0;
 }
+
+.game-container .chatBox {
+	z-index: 9;
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	transform: translate(-50%, 0);
+	width: 350px;
+	height: 60px;
+	padding: 10px 20px;
+	line-height: 20px;
+	font-size: 12px;
+	border: 2px solid #fff;
+	border-radius: 2px;
+	background: #cdc6a8;
+	box-sizing: border-box;
+	-moz-box-sizing: border-box; /* Firefox */
+	-webkit-box-sizing: border-box; /* Safari */
+}
+
+.game-container .chatBox p {
+	margin: 0;
+	user-select: none;
+}

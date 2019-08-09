@@ -3,12 +3,17 @@
 	var botCtx = null,
 		stageCtx = null,
 		topCtx = null,
+		animationLoop = null,
+		snakeChestPos = null,
+		statueChestPos = null,
+		tombChestPos = null,
 		running = false,
 		musicOn = true,
 		pause = false,
 		canPullBack = false,
 		needPanning = true,
-		weather = false,
+		needFleshUI = true,
+		fog = false,
 		levelComplish = false,
 		canvasW = 0,
 		canvasH = 0,
@@ -17,6 +22,9 @@
 		imgGridWidth = 30,
 		animationTimeOut = 100,
 		rectTile = [352, 288],
+		chestImgPositions = [[0, 64], [160, 64], [320, 64]],
+		UIImgPos = [704, 64],
+		animationElementList = [],
 		chestList = [],
 		beingList = [],
 		curLevel = {},
@@ -40,15 +48,21 @@
 
 		init: function() {
 			loader.init();
-			map.init();
-			Weather.init();
+			Level.init();
+			Fog.init();
 			unit.init();
+			Shader.init();
+			UI.init();
+			Map.init();
 			ctrl.init();
 		},
 
 		animate: function() {
 			unit.animate();
-			Weather.animate();
+			Shader.switchShadersAlpha();
+			if (fog) {
+				Fog.animate();
+			}
 			if (!levelComplish) {
 				game.checkComplish();
 			};
@@ -65,18 +79,24 @@
 			};
 
 			clearCanvas(stageCtx);
-			clearCanvas(topCtx);
 			if (needPanning) {
 				clearCanvas(botCtx);
 				fillContext();
-				map.computeBlock();
-				map.draw();
+				Level.computeBlock();
+				Level.draw();
 			};
+
 			unit.draw();
-			if (weather) {
-				Weather.draw();
+			Shader.drawShaders();
+			if (fog) {
+				Fog.draw();
 			};
-			Shader.switchShaders();
+
+			if (needFleshUI) {
+				clearCanvas(topCtx);
+				UI.draw();
+			};
+
 			if (running) {
 				game.animationFrame = requestAnimationFrame(game.draw);
 			}
@@ -91,13 +111,337 @@
 			// }
 			// gameStart = true;
 			running = true;
+			var triggers = curLevel.triggers;
+			if (triggers.length !== 0) {
+				triggers.forEach(function(trigger){
+					initTrigger(trigger);
+				});
+			}
 			game.animate();
-			game.animation = setInterval(game.animate, animationTimeOut);
+			animationLoop = setInterval(game.animate, animationTimeOut);
 
-			map.computeBlock(); // must after unit.init()
-			map.yeildMapImg(); // must after loader.init()
+			Level.computeBlock(); // must after unit.init()
+			Level.yeildMapImg(); // must after loader.init()
+			UI.draw();
 			game.draw();
 		}
+	};
+
+	var ButtonElement = function(oProp) {
+		this.type = 'button';
+		this.on = oProp.on || false;
+		this.name = oProp.name;
+		this.imgX = oProp.imgX;
+		this.imgY = oProp.imgY;
+		this.canvasX = oProp.canvasX;
+		this.canvasY = oProp.canvasY;
+		this.width = oProp.width;
+		this.height = oProp.height;
+	};
+
+	ButtonElement.prototype = {
+		draw: function() {
+			var width = this.width,
+				height = this.height;
+			topCtx.drawImage(game.sprite, this.imgX, this.imgY, width, height, this.canvasX, this.canvasY, width, height);
+		},
+
+		switchImgTo: function(status) {
+			switch (status) {
+				case 'selected':
+					this.imgY = 96;
+					break;
+				case 'unselected':
+					this.imgY = 64;
+					break;
+			}
+			needFleshUI = true;
+		},
+
+		toogle: function() {
+			this.imgY = this.on ? 64 : 96;
+			this.on = this.on ? false: true;
+			needFleshUI = true;
+		}
+	};
+
+	var UI = {
+		show: true,
+		selectedButton: null,
+		buttonList: [], // for checking if mouseover
+		UIList: [], // for drawing
+		mouse: {},
+		init: function() {
+			this.mapButton = new ButtonElement({name: 'map', imgX: 704, imgY: 64, canvasX: canvasW - 128, canvasY: 0, width: 32, height: 32}),
+			this.pullBackButton = new ButtonElement({name: 'pullBack', imgX: 736, imgY: 64, canvasX: canvasW - 96, canvasY: 0, width: 32, height: 32}),
+			this.resumeButton = new ButtonElement({name: 'resume', imgX: 768, imgY: 64, canvasX: canvasW - 64, canvasY: 0, width: 32, height: 32}),
+			this.musicButton = new ButtonElement({name: 'music', imgX: 800, imgY: 96, canvasX: canvasW - 32, canvasY: 0, width: 32, height: 32, on: true});
+			this.initButtonList();
+			this.initUIList();
+			addEvent(game.topCanvas, 'mousemove', this.onMouseMove);
+			addEvent(game.topCanvas, 'mousedown', this.onMouseDown);
+		},
+
+		initButtonList: function() {
+			this.buttonList = [];
+			this.buttonList.push(this.mapButton);
+			this.buttonList.push(this.pullBackButton);
+			this.buttonList.push(this.resumeButton);
+			this.buttonList.push(this.musicButton);
+		},
+		initUIList: function() {
+			this.UIList = [];
+			this.UIList.push(this.mapButton);
+			this.UIList.push(this.pullBackButton);
+			this.UIList.push(this.resumeButton);
+			this.UIList.push(this.musicButton);
+		},
+
+		draw: function() {
+			var UIList = this.UIList;
+			for (var elem of UIList) {
+				elem.draw();
+			};
+			needFleshUI = false;
+		},
+
+		showUI: function() {
+			this.initButtonList();
+			this.initUIList();
+			this.show = true;
+			needFleshUI = true;
+		},
+
+		hideUI: function() {
+			this.UIList = [];
+			this.buttonList = [];
+			this.show = false;
+			needFleshUI = true;
+		},
+
+		onMouseMove: function(e) {
+			var topCanvas = game.topCanvas,
+				mouse = UI.mouse,
+				selectedButton = UI.selectedButton,
+				offset = game.topCanvas.getBoundingClientRect(),
+				x,
+				y;
+			e = e || window.event;
+			x = e.pageX || event.clientX + window.pageXOffset;
+			y = e.pageY || event.clientY + window.pageYOffset;
+			x -= offset.left;
+			y -= offset.top
+			mouse.X = x;
+			mouse.Y = y;
+			if (selectedButton && !UI.checkMouseOver(selectedButton)) {
+				if (selectedButton.name !== 'music') {
+					selectedButton.switchImgTo('unselected');
+				}
+				selectedButton = null;
+			}
+		},
+
+		onMouseDown: function() {
+			if (!UI.show) {
+				return;
+			}
+			if (Map.top) {
+				Map.top = false;
+				UI.UIList.pop();
+				needFleshUI = true;
+				return;
+			}
+			var buttonList = UI.buttonList;
+			for (var elem of buttonList) {
+				if (UI.checkMouseOver(elem)) {
+					UI.selectedButton = elem;
+					if (elem.name !== 'music') {
+						elem.switchImgTo('selected');
+					} else {
+						elem.toogle();
+					};
+					addEvent(game.topCanvas, 'mouseup', UI.onMouseUp);
+				};
+			};
+		},
+
+		onMouseUp: function() {
+			var buttonList = UI.buttonList,
+				selectedButton = UI.selectedButton;
+			for (var elem of buttonList) {
+				if (UI.checkMouseOver(elem)) {
+					switch (elem.name) {
+						case 'map':
+							Map.top = true;
+							UI.UIList.push(Map);
+							needFleshUI = true;
+							break;
+						case 'pullBack':
+							pullBack();
+							break;
+						case 'resume':
+							game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
+							break;
+						case 'music':
+							break;
+					};
+				};
+			};
+			if (selectedButton && selectedButton.name !== 'music') {
+				selectedButton.switchImgTo('unselected');
+				selectedButton = null;
+			}
+			removeEvent(game.topCanvas, 'mouseup', UI.onMouseUp);
+		},
+
+		checkMouseOver: function(elem) {
+			var mouse = UI.mouse;
+			if (mouse.X >= elem.canvasX && mouse.X <= elem.canvasX + elem.width && mouse.Y >= elem.canvasY && mouse.Y <= elem.canvasY + elem.height) {
+				return true;
+			};
+		},
+	};
+
+	var Map = {
+		top: false,
+		snakePic: [640, 96],
+		statuePic: [608, 96],
+		tombPic: [672, 96],
+		token: {
+			lv1: {
+				found: false,
+				finish: false
+			},
+			lv2: {
+				found: false,
+				finish: false
+			},
+			lv3: {
+				found: false,
+				finish: false
+			},
+			lv4: {
+				found: false,
+				finish: false
+			}
+		},
+		canvas: document.createElement('canvas'),
+		init: function() {
+			this.context = this.canvas.getContext('2d');
+			this.context.width = 416;
+			this.context.height = 384;
+		},
+		draw: function() {
+			var token = this.token;
+			topCtx.save();
+			topCtx.globalAlpha = 0.6;
+			topCtx.fillStyle = '#000';
+			topCtx.fillRect(0, 0, canvasW, canvasH);
+			topCtx.restore();
+			topCtx.drawImage(game.map, 0, 0, 400, 384, 0, 0, 416, 384);
+			for (var lv in token) {
+				if (token[lv].found) {
+					console.log(lv + ' found');
+					switch (lv) {
+						case 'lv1':
+							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 197, 103, 32, 32);
+							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 201, 31, 32, 32);
+							break;
+						case 'lv2':
+							console.log('mark');
+							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 73, 214, 32, 32);
+							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 77, 148, 32, 32);
+							break;
+						case 'lv3':
+							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 319, 166, 32, 32);
+							this.context.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 321, 94 , 32, 32);
+							break;
+						case 'lv4':
+							this.context.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 221, 316, 32, 32);
+							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 225, 242, 32, 32);
+							break;
+					}
+				}
+				if (token[lv].finish) {
+					console.log(token[lv] + 'finish');
+					switch (lv) {
+						case 'lv1':
+							this.context.drawImage(game.map, 404, 0, 100, 100, 164, 12, 100, 100);
+							break;
+						case 'lv2':
+							this.context.drawImage(game.map, 404, 0, 100, 100, 34, 132, 100, 100);
+							break;
+						case 'lv3':
+							this.context.drawImage(game.map, 404, 0, 100, 100, 298, 84, 100, 100);
+							break;
+						case 'lv4':
+							this.context.drawImage(game.map, 404, 0, 100, 100, 186, 232, 100, 100);
+							break;
+					}
+				}
+			}
+			topCtx.drawImage(this.canvas, 0, 0);
+		}
+	};
+
+	var conversation = {
+		container: document.getElementsByClassName('game-container')[0],
+		chatting: false,
+		from: '',
+		charactors: {
+			"young": {
+				"name": "man",
+				"actions": {
+					"talk": {pos: [0, 0], width: 98, height: 158},
+					"release" : {pos: [112, 0], width: 150, height: 158}
+				},
+			}
+		},
+		showChat: function(from, action, message, remain) {
+			this.from = from;
+			action = action || 'talk';
+			this.action = this.charactors[from].actions[action];
+			
+			if (this.chatting) {
+				this.chatBox = document.getElementsByClassName('chatBox')[0];
+			} else {
+				this.chatBox = document.createElement('div');
+				this.chatBox.className = 'chatBox';
+				this.container.appendChild(this.chatBox);
+				this.chatting = true;
+			}
+			this.chatBox.innerHTML = message;
+
+			if (!remain) {
+				game.chatTimeout = setTimeout(function(){
+					clearTimeout(game.chatTimeout);
+					game.chatTimeout;
+					conversation.chatting = false;
+					UI.initUIList();
+					needFleshUI = true;
+					// this.chatBox.remove();
+					conversation.container.removeChild(conversation.chatBox);
+				}, 1000);
+			}
+			UI.hideUI();
+			UI.UIList.push(conversation);
+			needFleshUI = true;
+		},
+		draw: function() {
+			var	action = this.action,
+				imgPos = action.pos,
+				width = action.width,
+				height = action.height;
+			topCtx.drawImage(game[this.from], imgPos[0], imgPos[1], width, height, 0, canvasH - height, width, height);
+		}
+	};
+
+	var title = {
+
+	};
+
+	var animationLibrary = {
+
 	};
 
 	var loader = {
@@ -107,13 +451,14 @@
 			{name:'fog', url:'image/Fog', ext:'.png'},
 			{name:'tileSet', url:'image/tileSet', ext:'.png'},
 			{name:'sprite', url:'image/sprite', ext:'.png'},
-			{name:'UI', url:'image/UI', ext:'.png'},
 			{name:'clickSound', url:'sound/click', ext:'.wav'},
-			{name:'bgm', url:'sound/V.A. - Toroko\'s Theme', ext:'.mp3'},
+			// {name:'bgm', url:'sound/V.A. - Toroko\'s Theme', ext:'.mp3'},
 			{name:'footstepSound', url:'sound/footstep', ext:'.wav'},
 			{name:'playSound', url:'sound/play', ext:'.wav'},
-			{name:'correctSound', url:'sound/correct', ext:'.wav'},
-			{name:'winSound', url:'sound/win', ext:'.wav'}
+			{name:'map', url:'image/map', ext:'.png'},
+			{name:'young', url:'image/charactor_young', ext:'.png'},
+			// {name:'correctSound', url:'sound/correct', ext:'.wav'},
+			// {name:'winSound', url:'sound/win', ext:'.wav'}
 		],
 
 		init: function() {
@@ -173,12 +518,21 @@
 		down: false,
 
 		init: function() {
-			addEvent(window, 'keydown', this.keydown);
-			addEvent(window, 'keyup', this.keyup);
-			addEvent(window, 'keypress', this.pullBack)
+			addEvent(window, 'keydown', this.onKeyDown);
+			addEvent(window, 'keyup', this.onKeyUp);
+			addEvent(window, 'keypress', this.onKeyPress);
 		},
 
-		keydown: function(e) {
+		onKeyDown: function(e) {
+			if (levelComplish) {
+				ctrl.left = false;
+				ctrl.up = false;
+				ctrl.right = false;
+				ctrl.down = false;
+				return;
+			} else if (conversation.chatting) {
+				return;
+			}
 			e = e || window.event;
 			switch (e.keyCode) {
 				case 37:
@@ -193,10 +547,13 @@
 				case 40:
 					ctrl.down = true;
 					break;
+				case 90:
+					game.man.speed = 16;
+					break;
 			};
 		},
 
-		keyup: function(e) {
+		onKeyUp: function(e) {
 			e = e || window.event;
 			switch (e.keyCode) {
 				case 37:
@@ -211,55 +568,34 @@
 				case 40:
 					ctrl.down = false;
 					break;
+				case 90:
+					game.man.speed = 8;
+					break;
 			};
 		},
 
-		pullBack: function(e) {
-			if (!canPullBack) {
+		onKeyPress: function(e) {
+			if (levelComplish) {
 				return;
-			};
-			var lastChest = lastStatus.chest,
-				lastDir = lastStatus.dir,
-				man = game.man,
-				prePosition = lastChest.prePosition;
+			}
 			e = e || window.event;
-			if (e.keyCode == 120) {
-				lastChest.mapGridX = prePosition.mapGridX;
-				lastChest.mapGridY = prePosition.mapGridY;
-				lastChest.mapX = lastChest.mapGridX * tileSize + lastChest.box.marginLeft;
-				lastChest.mapY = lastChest.mapGridY * tileSize + lastChest.box.marginUp;
-				switch (lastDir) {
-					case 'up':
-						man.mapY = lastChest.mapY + lastChest.height;
-						man.mapX = lastChest.mapX + man.box.marginLeft;
-						break;
-					case 'down':
-						man.mapY = lastChest.mapY - man.height;
-						man.mapX = lastChest.mapX + man.box.marginLeft;
-						break;
-					case 'left':
-						man.mapX = lastChest.mapX + lastChest.width;
-						man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
-						break;
-					case 'right':
-						man.mapX = lastChest.mapX - man.width;
-						man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
-						break;
-				};
-				lastChest.dir = '';
-				lastChest.arrive = true;
-				needPanning = true;
-				canPullBack = false;
+			switch (e.keyCode) {
+				case 120:
+					pullBack();
+					break;
+				case 114:
+					game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
+					break;
 			};
 		}
 	};
 
-	var map = {
+	var Level = {
 		canvas: document.createElement('canvas'),
 		init: function() {
 			var GWidth,
 				GHeight;
-			curLevel = this.level[levelN];
+			curLevel = this.levels[levelN];
 			GWidth = curLevel.mapGridWidth;
 			GHeight = curLevel.mapGridHeight;
 			this.width = GWidth * tileSize;
@@ -269,6 +605,7 @@
 			this.context = this.canvas.getContext('2d');
 			this.border = {};
 			if (levelN == 0) {
+				fog = true;
 				game.checkComplish = checkLevelHit;
 			} else {
 				game.checkComplish = checkAllInPlace;
@@ -328,59 +665,9 @@
 		draw: function() {
 			botCtx.drawImage(this.canvas, this.mapBlockX * canvasW, this.mapBlockY * canvasH, canvasW, canvasH, 0, 0, canvasW, canvasH);
 			needPanning = false;
-			// var halfCanvasW = 0.5 * canvasW,
-			// 	halfCanvasH = 0.5 * canvasH,
-			// 	theta1 = mapX + halfCanvasW - mapW,
-			// 	theta2 = mapY + halfCanvasH - mapH,
-			// 	theta3 = mapY - halfCanvasH,
-			// 	theta4 = mapX - halfCanvasW,
-			// 	alpha1 = mapW - halfCanvasW,
-			// 	alpha2 = mapH - halfCanvasH;
-
-			// if (halfCanvasW <= mapX <= alpha1) {
-			// 	if (halfCanvasH <= mapY <= alpha2) {
-			// 		botCtx.drawImage(this.canvas, alpha1, alpha2, canvasW, canvasH, 0, 0, canvasW, canvasH);
-			// 	} else if (0 < theta2 < mapH) {
-			// 		botCtx.drawImage(this.canvas, mapX, mapY, canvasW, canvasH - h, 0, 0, canvasW, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, mapX, 0, canvasW, h, 0, 0, canvasW, h);
-			// 	} else if (-canvasH < theta3 < 0) {
-			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW, canvasH - h, 0, h, canvasW, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, theta4, mapH - h, canvasW, h, 0, 0, canvasW, h);
-			// 	};
-			// } else if (0 < theta1 < mapW) {
-			// 	if (halfCanvasH <= mapY <= alpha2) {
-			// 		botCtx.drawImage(this.canvas, theta4, theta3, canvasW - w, canvasH, 0, 0, canvasW - w, canvasH);
-			// 		botCtx.drawImage(this.canvas, 0, theta3, W, canvasH, canvasW - w, 0, w, canvasH);							
-			// 	} else if (0 < theta2 < mapH) {
-			// 		botCtx.drawImage(this.canvas, theta4, theta3, canvasW - w, canvasH - h, 0, 0, canvasW - w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, 0, theta3, w, canvasH - h, canvasW - w, 0, w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW - w, h, 0, canvasH - h, canvasw - w, h);
-			// 		botCtx.drawImage(this.canvas, 0, 0, w, h, canvasW - w, canvasH - h, w, h);
-			// 	} else if (-canvasH < theta3 < 0) {
-			// 		botCtx.drawImage(this.canvas, theta4, 0, canvasW - w, canvasH - h, 0, h, canvasW - w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, theta4, mapH - h, canvasW - w, h, 0, 0, canvasW - w, h);
-			// 		botCtx.drawImage(this.canvas, 0, 0, w, canvasH - h, canvasW - w, 0, w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, 0, mapH - h, w, h, canvasW - w, 0, w, h);
-			// 	};
-			// } else if (-canvasW < theta4 < 0) {
-			// 	if (halfCanvasH <= mapY <= alpha2) {
-			// 		botCtx.drawImage(this.canvas, 0, theta3, mapW - w, mapH, canvasW - w, 0, mapW - w, mapH);
-			// 		botCtx.drawImage(this.canvas, mapW - w, theta3, w, canvasH, 0, 0, w, canvasH);
-			// 	} else if (-canvasH < theta3 < 0) {
-			// 		botCtx.drawImage(this.canvas, 0, 0, canvasW - w, canvasH - h, w, h, canvasW - w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, 0, w, canvasW - w, h, w, 0, canvasW - w, h);
-			// 		botCtx.drawImage(this.canvas, mapW - w, 0, w, mapH - h, 0, h, w, mapH - h);
-			// 		botCtx.drawImage(this.canvas, mapW - w, mapH - h, w, h, 0, 0, w, h);
-			// 	} else if (0 < theta2 < mapH) {
-			// 		botCtx.drawImage(this.canvas, 0, theta3, canvasW - w, canvasH - h, w, 0, canvasW - w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, mapW - w, theta3, w, canvasH - h, 0, 0, w, canvasH - h);
-			// 		botCtx.drawImage(this.canvas, 0, 0, canvasW - w, h, w, canvasH - h, canvasW - w, h);
-			// 		botCtx.drawImage(this.canvas, mapW - w, 0, w, h, canvasH - h, 0, w, h);
-			// 	};
-			// };
 		},
 
-		"level": [
+		"levels": [
 			// {
 			// 	"mapName": "testRoom",
 			// 	"mapGridWidth":13,
@@ -448,7 +735,64 @@
 					[272,272,272,273,273,273,272,273,272,272,273,211,273,272,272,273,272,273,272,273,272,272,273,273,272,272]
 				],
 				"shade":{},
-				"weather": 'fog'
+				"weather": 'fog',
+				"triggers": [
+					{
+						"type": 'timed', "time": 1000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>......&#x8FDB;&#x6765;&#x4E86;&#x3002;</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 2000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x5927;&#x9053;&#x4E0A;&#x5947;&#x602A;&#x96D5;&#x50CF;&#x4EA7;&#x751F;&#x7684;&#x5E7B;&#x5883;&#x3002;</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 3500,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x53EA;&#x8981;&#x628A;&#x5B83;&#x4EEC;&#x6D88;&#x9664;&#xFF0C;&#x4ECA;&#x5929;&#x7684;&#x996D;&#x94B1;&#x5C31;&#x6709;&#x7740;&#x843D;&#x5566;&#xFF01;</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 5000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>......</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 6000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x8BDD;&#x8BF4;&#xFF0C;&#x6700;&#x8FD1;&#x5C0F;&#x9547;&#x56DB;&#x5468;&#x51FA;&#x73B0;&#x7684;&#x8FD9;&#x4E9B;&#x96D5;&#x50CF;&#xFF0C;&#x6BCF;&#x5929;&#x6570;&#x91CF;&#x4F3C;&#x4E4E;&#x662F;&#x4E00;&#x5B9A;&#x7684;&#x3002; </p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 9000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x5B83;&#x4EEC;&#x4EA7;&#x751F;&#x7684;&#x5E7B;&#x5883;&#x867D;&#x4E0D;&#x81F3;&#x4E8E;&#x5371;&#x6025;&#x5C45;&#x6C11;&#x7684;&#x5B89;&#x5168;&#xFF0C;&#x4F46;&#x7ECF;&#x5E38;&#x628A;&#x65E9;&#x6668;&#x5916;&#x51FA;&#x7684;&#x5546;&#x4EBA;&#x7ED9;&#x56F0;&#x4F4F;&#xFF0C;&#x56E0;&#x6B64;&#x5236;&#x9020;&#x4E86;&#x4E0D;&#x5C0F;&#x7684;&#x9EBB;&#x70E6;&#x3002;</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 12000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x8FD9;&#x4E9B;&#x96D5;&#x50CF;&#x4F55;&#x65F6;&#x624D;&#x80FD;&#x5B8C;&#x5168;&#x6D88;&#x5931;&#x5462;......</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 14000,
+						"action": function() {
+							conversation.showChat('young', 'talk', '<p>&#x60F3;&#x5565;&#x5462;&#xFF0C;&#x5230;&#x90A3;&#x5929;&#x53C8;&#x5F97;&#x91CD;&#x65B0;&#x627E;&#x4E8B;&#x505A;&#x4E86;&#x3002;&#x8D76;&#x5FEB;&#x5F00;&#x59CB;&#x5427;&#x3002;</p>', true);
+						}
+					},
+					{
+						"type": "timed", "time": 17000,
+						"action": function() {
+							conversation.showChat('young', 'release', '&#xFF08;...&#x91CA;&#x653E;&#x4FE1;&#x4F7F;...&#xFF09;', false);
+							game.man.processOrder('play', {});
+						}
+					}
+				]
 			},
 			{
 				"mapName": "room1",
@@ -463,7 +807,7 @@
 				"terrain":[
 					[0,0,0,0,0,0,0,0,0,0,0,0,0],
 					[0,0,0,0,0,0,0,0,0,0,0,0,0],
-					[0,0,31,44,44,44,44,82,0,0,0,0,0],
+					[0,0,83,44,44,44,44,82,0,0,0,0,0],
 					[0,0,47,124,125,123,122,34,44,44,44,82,0],
 					[0,0,45,154,155,153,152,121,124,125,122,38,0],
 					[0,0,31,211,211,211,211,151,154,155,152,38,0],
@@ -480,7 +824,7 @@
 						"tiles":[
 							[0,0,0,0,0,0,0,0,0,0,0,0,0],
 							[0,0,0,0,0,0,0,0,0,0,0,0,0],
-							[0,0,83,0,0,0,0,0,0,0,0,0,0],
+							[0,0,0,0,0,0,0,0,0,0,0,0,0],
 							[0,0,0,0,0,0,0,0,0,0,0,0,0],
 							[0,0,0,0,0,0,0,0,0,0,0,0,0],
 							[0,0,81,33,0,0,0,0,0,0,0,0,0],
@@ -493,7 +837,8 @@
 						]
 					},
 				},
-				"weather": ''
+				"weather": '',
+				"triggers": ''
 			},
 			{
 				"mapName": "room2",
@@ -538,7 +883,8 @@
 						]
 					},
 				},
-				"weather": ''
+				"weather": '',
+				"triggers": ''
 			},
 			{
 				"mapName": "room3",
@@ -583,7 +929,8 @@
 						]
 					},
 				},
-				"weather": ''
+				"weather": '',
+				"triggers": ''
 			},
 			{
 				"mapName": "room4",
@@ -628,15 +975,16 @@
 						]
 					},
 				},
-				"weather": ''
+				"weather": '',
+				"triggers": ''
 			}
 		]
 	};
 
-	var Weather = {
+	var Fog = {
 		init: function() {
-			if (curLevel.weather) {
-				weather = true;
+			if (curLevel.weather == 'fog') {
+				fog = true;
 				this.X = 0;
 				this.vx = -1;
 			};
@@ -650,42 +998,60 @@
 		},
 
 		draw: function() {
-			topCtx.globalAlpha = 0.2;
-			topCtx.drawImage(game.fog, this.X, 0, canvasW, canvasH);
-			topCtx.drawImage(game.fog, this.X + canvasW, 0, canvasW, canvasH);
+			stageCtx.save();
+			stageCtx.globalAlpha = 0.2;
+			stageCtx.drawImage(game.fog, this.X, 0, canvasW, canvasH);
+			stageCtx.drawImage(game.fog, this.X + canvasW, 0, canvasW, canvasH);
+			stageCtx.restore();
 		}
 	};
 
 	var Shader = {
-		switchShaders: function() {
-			var shades = curLevel.shade,
-				man = game.man;
-			for (var k in shades) {
-				var shade = shades[k].tiles;
-				if (k == man.inShade) {
-					topCtx.globalAlpha = 0.6;
-				} else {
-					topCtx.globalAlpha = 1;
-				};
-				this.drawShaders(shade);
-			}
+		shadeList: [],
+		init: function() {
+			this.shadeList = [];
+			var shades = curLevel.shade;
+			for (var shadeName in shades) {
+				this.shadeList.push({name: shadeName, tiles: shades[shadeName].tiles, alpha: 1});
+			};
 		},
 
-		drawShaders: function(shade) {
-			var	GWidth = curLevel.mapGridWidth,
+		switchShadersAlpha: function() {
+			var shadeList = this.shadeList,
+				man = game.man;
+			for (var shade of shadeList) {
+				if (shade.name == man.inShade) {
+					shade.alpha = 0.6;
+				} else {
+					shade.alpha = 1;
+				};
+			};
+		},
+
+		drawShaders: function() {
+			var	shadeList = this.shadeList,
+				GWidth = curLevel.mapGridWidth,
 				GHeight = curLevel.mapGridHeight,
 				tileSet = game.tileSet,
 				tileID,
 				tileX,
 				tileY;
-			for (var i = 0; i < GHeight; i++) {
-				for (var j = 0; j < GWidth; j++) {
-					tileID = shade[i][j];
-					tileX = (tileID - 1) % imgGridWidth;
-					tileY = Math.floor((tileID - 1) / imgGridWidth);
-					topCtx.drawImage(tileSet, tileX * tileSize, tileY * tileSize, tileSize, tileSize, j * tileSize, i * tileSize, tileSize, tileSize);
-				}
-			}
+			for (var shade of shadeList) {
+				stageCtx.save();
+				stageCtx.globalAlpha = shade.alpha;
+				var tiles = shade.tiles;
+				for (var i = 0; i < GHeight; i++) {
+					for (var j = 0; j < GWidth; j++) {
+						tileID = tiles[i][j];
+						if (tileID !== 0) {
+							tileX = (tileID - 1) % imgGridWidth;
+							tileY = Math.floor((tileID - 1) / imgGridWidth);
+							stageCtx.drawImage(tileSet, tileX * tileSize, tileY * tileSize, tileSize, tileSize, j * tileSize, i * tileSize, tileSize, tileSize);
+						};
+					};
+				};
+				stageCtx.restore();
+			};
 		}
 	};
 
@@ -695,7 +1061,6 @@
 				chests = curLevel.chests,
 				chestslen = chests.length,
 				mapName = curLevel.mapName,
-				imgPositions = [[0, 64], [160, 64], [320, 64]],
 				id = 1,
 				mapGridCoor,
 				chestImgPos,
@@ -714,7 +1079,7 @@
 			for (var i = 0; i < chestslen; i++) {
 				mapGridCoor = chests[i];
 				if (mapName == "room0") {
-					chestImgPos = imgPositions[i];
+					chestImgPos = chestImgPositions[i];
 				};
 				oItem = {type: "chest", id: id++, box: Chest.box, imgPos: chestImgPos, gridWidth: 1, gridHeight: 2, mapGridX: mapGridCoor[0], mapGridY: mapGridCoor[1], actions: Chest.rawActions, speed: 0};
 				chest = new boxObj(oItem);
@@ -834,7 +1199,7 @@
 
 	var commonFunc = {
 		draw: function(){
-			var border = map.border,
+			var border = Level.border,
 				frameWidth = this.frameWidth,
 				frameHeight = this.frameHeight,
 				imgPos = this.imgPos,
@@ -843,6 +1208,9 @@
 				canvasX = this.mapX - this.pixelOffsetX - border.left - drawingInterpolationFactor * this.lastMovementX,
 				canvasY = this.mapY - this.pixelOffsetY - border.up - drawingInterpolationFactor * this.lastMovementY;
 
+			if (this.type == 'human') {
+				this.drawShadow(canvasX + 32, canvasY + 64, 10, 3);
+			}
 			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, canvasX, canvasY, frameWidth, frameHeight);
 		},
 
@@ -912,14 +1280,14 @@
 			var shades = curLevel.shade,
 				man = game.man;
 
-			for (var k in shades) {
-				var data = shades[k].shadeData,
+			for (var shadeName in shades) {
+				var data = shades[shadeName].shadeData,
 					len = data.length;
 				for (var i = 0; i < len; i++) {
-					var obj = data[i],
+					var shadeGrid = data[i],
 						grid = {
-							mapX: obj[0] * tileSize,
-							mapY: obj[1] * tileSize,
+							mapX: shadeGrid[0] * tileSize,
+							mapY: shadeGrid[1] * tileSize,
 							box: {
 								left: 0,
 								right: 0,
@@ -928,10 +1296,10 @@
 							}
 						};
 					if (this.intersects(grid)) {
-						return k;
-					}
-				}
-			}
+						return shadeName;
+					};
+				};
+			};
 			return null;
 		},
 
@@ -999,10 +1367,6 @@
 		},
 
 		calculateCoor: function() {
-			if (!running) {
-				return;
-			};
-
 			var left = ctrl.left,
 				right = ctrl.right,
 				up = ctrl.up,
@@ -1034,26 +1398,25 @@
 					};
 					if (up || down) {
 						speed = this.speed * sin45;
-						pushSpeed = this.pushSpeed * sin45;
 					};
 					this.mapX -= speed;
-					if (this.mapX < map.border.left) {
-						if (this.mapX < 0) {
-							this.mapX = map.width - this.box.marginLeft;
+					if (this.mapX < Level.border.left) { // move out of canvas
+						if (this.mapX < 0) { // move out of map
+							this.mapX = Level.width - this.box.marginLeft; // transport to right of map
 						};
 						needPanning = true;
 					};
 					chests = this.intersectWithChest();
 					grid = this.intersectWithWall();
 					nOfChests = chests.length;
-					if (grid) {
+					if (grid) { // wall ahead
 						this.mapX = grid.mapX + tileSize;
-					} else if (nOfChests > 1) {
+					} else if (nOfChests > 1) { // pushing more than one chest
 						chest = chests[0];
 						this.mapX = chest.mapX + chest.width;
-					} else if (nOfChests == 1) {
+					} else if (nOfChests == 1) { // pushing a chest
 						chest = chests[0];
-						if (this.mapX < chest.mapX + chest.width) {
+						if (this.mapX < chest.mapX + chest.width) { //move faster than the chest u r moving
 							this.mapX = chest.mapX + chest.width;
 						};
 						this.processOrder('pushBox', {dir: 'left', interObj: chest});
@@ -1065,11 +1428,10 @@
 					};
 					if (up || down) {
 						speed = this.speed * sin45;
-						pushSpeed = this.pushSpeed * sin45;
 					};
 					this.mapX += speed;
-					if (this.mapX + this.width > map.border.right) {
-						if (this.mapX + this.width > map.width) {
+					if (this.mapX + this.width > Level.border.right) {
+						if (this.mapX + this.width > Level.width) {
 							this.mapX = -this.width + this.box.marginRight;
 						};
 						needPanning = true;
@@ -1096,12 +1458,11 @@
 					};
 					if (left || right) {
 						speed = this.speed * sin45;
-						pushSpeed = this.pushSpeed * sin45;
 					};
 					this.mapY -= speed;
-					if (this.mapY < map.border.up) {
+					if (this.mapY < Level.border.up) {
 						if (this.mapY < 0) {
-							this.mapY = map.height - this.box.marginUp;
+							this.mapY = Level.height - this.box.marginUp;
 						};
 						needPanning = true;
 					};
@@ -1127,11 +1488,10 @@
 					};
 					if (left || right) {
 						speed = this.speed * sin45;
-						pushSpeed = this.pushSpeed * sin45;
 					};
 					this.mapY += speed;
-					if (this.mapY + this.height > map.border.down) {
-						if (this.mapY  + this.height > map.height) {
+					if (this.mapY + this.height > Level.border.down) {
+						if (this.mapY  + this.height > Level.height) {
 							this.mapY = -this.height + this.box.marginDown;
 						};
 						needPanning = true;
@@ -1155,6 +1515,21 @@
 				this.lastMovementX = this.mapX - this.lastMapX;
 				this.lastMovementY = this.mapY - this.lastMapY;
 			};
+		},
+
+		drawShadow: function(x, y, a, b) {
+			var r = (a > b) ? a : b,
+				ratioX = a / r,
+				ratioY = b / r,
+				offset = this.faceTo == 'L' ? -1 : 1;
+			stageCtx.save();
+			stageCtx.scale(ratioX, ratioY);
+			stageCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+			stageCtx.beginPath();
+			stageCtx.arc(x / ratioX + offset, y / ratioY, r, 0, 2*Math.PI, false);
+			stageCtx.closePath();
+			stageCtx.fill();
+			stageCtx.restore();
 		}
 	};
 
@@ -1193,81 +1568,7 @@
 			this.alterFrame();
 			this.calculateCoor();
 		},
-		/*
-		calculateCoor: function() {
-			var	interGrid,
-				interChest,
-				dir = this.dir;
-			if (dir && this.speed) {
-				switch (this.dir) {
-					case 'up':
-						if (this.speed > 0) {
-							this.Y -= this.speed;
-							interGrid = this.intersectWithWall();
-							interChest = this.intersectWithChest();
-							interChestLen = interChest.length;
-							if (interGrid) {
-								this.Y = interGrid.Y + tileSize;
-							} else if (interChestLen) {
-								this.Y = interChest[0].Y + interChest[0].height;
-							}
-							this.speed += this.friction;
-						} else {
-							this.dir = '';
-						};
-						break;
-					case 'down':
-						if (this.speed > 0) {
-							this.Y += this.speed;
-							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest();
-							interChestLen = interChest.length;
-							if (interGrid) {
-								this.Y = interGrid.Y - this.height;
-							} else if (interChestLen) {
-								this.Y = interChest[0].Y - this.height;
-							}
-							this.speed += this.friction;
-						} else {
-							this.dir = '';
-						};
-						break;
-					case 'left':
-						if (this.speed > 0) {
-							this.X -= this.speed;
-							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest();
-							interChestLen = interChest.length;
-							if (interGrid) {
-								this.X = interGrid.X + tileSize;
-							} else if (interChestLen) {
-								this.X = interChest[0].X + interChest[0].width;
-							}
-							this.speed += this.friction;
-						} else {
-							this.dir = '';
-						};
-						break;
-					case 'right':
-						if (this.speed > 0) {
-							this.X += this.speed;
-							interGrid = this.intersectWithWall(),
-							interChest = this.intersectWithChest();
-							interChestLen = interChest.length;
-							if (interGrid) {
-								this.X = interGrid.X - this.width;
-							} else if (interChestLen) {
-								this.X = interChest[0].X - this.width;
-							}
-							this.speed += this.friction;
-						} else {
-							this.dir = '';
-						};
-						break;
-				}
-			}
-		},*/
-
+		
 		calculateCoor: function() {
 			var	interGrid,
 				interChest,
@@ -1303,7 +1604,7 @@
 						};
 						vy = Math.abs(this.mapY - this.nextY) * this.easing;
 						this.mapY -= vy;
-						if (this.mapY - 1 <= this.nextY) {
+						if (this.mapY - 2 <= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
 							if (this.mapGridY < 0) {
@@ -1343,7 +1644,7 @@
 						};
 						vy = Math.abs(this.mapY - this.nextY) * this.easing;
 						this.mapY += vy;
-						if (this.mapY + 1 >= this.nextY) {
+						if (this.mapY + 2 >= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
 							if (this.mapGridY >= curLevel.mapGridHeight) {
@@ -1383,7 +1684,7 @@
 						};
 						vx = Math.abs(this.mapX - this.nextX) * this.easing;
 						this.mapX -= vx;
-						if (this.mapX - 1 <= this.nextX) {
+						if (this.mapX - 2 <= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
 							if (this.mapGridX < 0) {
@@ -1423,7 +1724,7 @@
 						};
 						vx = Math.abs(this.mapX - this.nextX) * this.easing;
 						this.mapX += vx;
-						if (this.mapX + 1 >= this.nextX) {
+						if (this.mapX + 2 >= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
 							if (this.mapGridX >= curLevel.mapGridWidth) {
@@ -1520,100 +1821,18 @@
 		draw: commonFunc.draw,
 	};
 
-	// var particle = {
-	// 	numFog: 10,
-	// 	fogs: [],
-	// 	init: function() {
-	// 		numFog = this.numFog;
-	// 		for (var fog, i = 0; i < numFog; i++) {
-	// 			fog = new Fog();
-	// 			fog.x = canvasW;
-	// 			fog.Y = Math.random() * canvasH;
-	// 			fog.width = Math.random() * tileSize * 2;
-	// 			fog.height = Math.random() * tileSize;
-	// 			fog.vx = -8 + Math.random() * 5;
-	// 			fog.vy = Math.sin(this.angle) * 4;
-	// 			fog.angle = Math.random() * 10;
-	// 			fog.alpha = Math.random() / 3;
-	// 			this.fogs.push(fog);
-	// 		};
-	// 	},
-
-	// 	animate: function() {
-	// 		this.fogs.forEach(function(fog){
-	// 			fog.animate();
-	// 		});
-	// 	},
-
-	// 	draw: function() {
-	// 		if (levelN !== 0) {
-	// 			return;
-	// 		};
-	// 		this.fogs.forEach(function(fog){
-	// 			fog.draw(topCtx);
-	// 		});
-	// 	}
-	// }
-
-	// var Fog = function() {
-	// 	this.x = 0;
-	// 	this.y = 0;
-	// 	this.vx = 0;
-	// 	this.vy = 0;
-	// 	// this.scaleX = 0;
-	// 	// this.scaleY = 0;
-	// 	this.width = 0;
-	// 	this.height = 0;
-	// 	this.angle = 0;
-	// 	this.alpha = 0;
-	// 	this.color = '#fff';
-	// };
-
-	// Fog.prototype.draw = function(ctx) {
-	// 	ctx.save();
-	// 	ctx.globalAlpha = this.alpha;
-	// 	ctx.translate(this.x, this.y);
-	// 	// ctx.scale(this.scaleX, this.scaleY);
-	// 	ctx.fillStyle = this.color;
-	// 	ctx.fillRect(0, 0, this.width, this.height);
-	// 	ctx.restore();
-	// };
-
-	// Fog.prototype.animate = function() {
-	// 	this.x += this.vx;
-	// 	this.y += this.vy;
-	// 	this.angle += 0.1;
-	// 	this.vy = Math.sin(this.angle) * 4;
-	// 	if (this.x < 0) {
-	// 		this.x = canvasH;
-	// 		this.y = Math.random() * canvasH;
-	// 		this.width = Math.random() * tileSize * 2;
-	// 		this.height = Math.random() * tileSize;
-	// 		this.vx = -1 + Math.random() / 2;
-	// 		this.vy = Math.sin(this.angle) * 0.01;
-	// 		this.angle = Math.random() * 10;
-	// 		this.alpha = Math.random() / 3;
-	// 	};
-	// };
-
 	var fillContext = function() {
 		botCtx.rect(0, 0, canvasW, canvasH);
 		botCtx.fillStyle = "black";
 		botCtx.fill();
 	};
 
-	var clearCanvas = function(ctx) {
-		ctx.clearRect(0, 0, canvasW, canvasH);
-	};
-
-	var showScreen = function(id) {
-		var screen = document.getElementById(id);
-		screen.style.display = 'block';
-	};
-
-	var hideScreen = function (id) {
-		var screen = document.getElementById(id);
-		screen.style.display = 'none';
+	var clearCanvas = function(ctx, canvasX, canvasY, width, height) {
+		canvasX = canvasX || 0;
+		canvasY = canvasY || 0;
+		width = width || canvasW;
+		height = height || canvasH;
+		ctx.clearRect(canvasX, canvasY, width, height);
 	};
 
 	var chestOnGrid = function(grid) {
@@ -1639,8 +1858,26 @@
 				return;
 			};
 		};
+		switch (levelN) {
+			case 1:
+				Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Map['token']['lv1'].finish = true;
+				break;
+			case 2:
+				Level.levels[1].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Map['token']['lv2'].finish = true;
+				break;
+			case 3:
+				Level.levels[2].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Map['token']['lv3'].finish = true;
+				break;
+			case 4:
+				Level.levels[3].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Map['token']['lv4'].finish = true;
+				break;
+		};
 		levelComplish = true;
-		switchLevel(0);
+		game.switchTimeout = setTimeout(function(){switchLevel(0);}, 1000);
 	};
 
 	var checkLevelHit = function() {
@@ -1649,46 +1886,153 @@
 			downRect = rects[1],
 			snakeChest = chestList[0],
 			statueChest = chestList[1],
-			tombChest = chestList[2];
-		
-		if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && statueChest.mapGridX == downRect[0] && statueChest.mapGridY == downRect[1]) {
-			levelComplish = true;
-			switchLevel(1);
-		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1]) {
-			levelComplish = true;
-			switchLevel(2);
-		} else if (snakeChest.mapGridX == upRect[0] && snakeChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
-			levelComplish = true;
-			switchLevel(3);
-		} else if (statueChest.mapGridX == upRect[0] && statueChest.mapGridY == upRect[1] && tombChest.mapGridX == downRect[0] && tombChest.mapGridY == downRect[1]) {
-			levelComplish = true;
-			switchLevel(4);
-		} else if (snakeChest.mapGridX == downRect[0] && snakeChest.mapGridY == downRect[1] && tombChest.mapGridX == upRect[0] && tombChest.mapGridY == upRect[1]) {
-			levelComplish = true;
-			switchLevel(5);
+			tombChest = chestList[2],
+			snakeChestMapGridX = snakeChest.mapGridX,
+			snakeChestMapGridY = snakeChest.mapGridY,
+			statueChestMapGridX = statueChest.mapGridX,
+			statueChestMapGridY = statueChest.mapGridY,
+			tombChestMapGridX = tombChest.mapGridX,
+			tombChestMapGridY = tombChest.mapGridY;
+
+		if (snakeChestMapGridX == downRect[0] && snakeChestMapGridY == downRect[1] && statueChestMapGridX == upRect[0] && statueChestMapGridY == upRect[1]) {
+			if (!Map.token['lv1'].finish) {
+				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
+				levelComplish = true;
+				game.switchTimeout = setTimeout(function(){switchLevel(1);}, 1000);
+			}
+		} else if (statueChestMapGridX == downRect[0] && statueChestMapGridY == downRect[1] && snakeChestMapGridX == upRect[0] && snakeChestMapGridY == upRect[1]) {
+			if (!Map.token['lv1'].finish) {
+				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
+				levelComplish = true;
+				game.switchTimeout = setTimeout(function(){switchLevel(2);}, 1000);
+			}
+		} else if (snakeChestMapGridX == downRect[0] && snakeChestMapGridY == downRect[1] && tombChestMapGridX == upRect[0] && tombChestMapGridY == upRect[1]) {
+			if (!Map.token['lv1'].finish) {
+				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
+				levelComplish = true;
+				game.switchTimeout = setTimeout(function(){switchLevel(3);}, 1000);
+			}
+		} else if (tombChestMapGridX == downRect[0] && tombChestMapGridY == downRect[1] && statueChestMapGridX == upRect[0] && statueChestMapGridY == upRect[1]) {
+			if (!Map.token['lv1'].finish) {
+				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
+				levelComplish = true;
+				game.switchTimeout = setTimeout(function(){switchLevel(4);}, 1000);
+			}
 		};
 	};
 
-	var switchLevel = function(num) {
-		setTimeout(function() {
-			running = false;
-			levelComplish = false;
-			levelN = num;
-			reset();
-			clearInterval(game.animation);
-			cancelAnimationFrame(game.animationFrame);
-			map.init();
-			if (levelN == 0) {
-				weather = true;
+	var pullBack = function() {
+		var lastChest,
+			lastDir,
+			man,
+			prePosition;
+			if (!canPullBack) {
+				return;
 			};
-			unit.init();
-			game.start();
-		}, 1000);
+			lastChest = lastStatus.chest;
+			lastDir = lastStatus.dir;
+			man = game.man;
+			prePosition = lastChest.prePosition;
+			lastChest.mapGridX = prePosition.mapGridX;
+			lastChest.mapGridY = prePosition.mapGridY;
+			lastChest.mapX = lastChest.mapGridX * tileSize + lastChest.box.marginLeft;
+			lastChest.mapY = lastChest.mapGridY * tileSize + lastChest.box.marginUp;
+			switch (lastDir) {
+				case 'up':
+					man.mapY = lastChest.mapY + lastChest.height;
+					man.mapX = lastChest.mapX + man.box.marginLeft;
+					break;
+				case 'down':
+					man.mapY = lastChest.mapY - man.height;
+					man.mapX = lastChest.mapX + man.box.marginLeft;
+					break;
+				case 'left':
+					man.mapX = lastChest.mapX + lastChest.width;
+					man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
+					break;
+				case 'right':
+					man.mapX = lastChest.mapX - man.width;
+					man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
+					break;
+			};
+			lastChest.dir = '';
+			lastChest.arrive = true;
+			needPanning = true;
+			canPullBack = false;
+		};
+
+	var switchLevel = function(num) {
+		clearTimeout(game.switchTimeout);
+		game.switchTimeout = null;
+		running = false;
+		levelComplish = false;
+		levelN = num;
+		switch (num) {
+			case 1:
+				Map['token']['lv1'].found = true;
+				break;
+			case 2:
+				Map['token']['lv2'].found = true;
+				break;
+			case 3:
+				Map['token']['lv3'].found = true;
+				break;
+			case 4:
+				Map['token']['lv4'].found = true;
+				break;
+		};
+		reset();
+		clearInterval(animationLoop);
+		cancelAnimationFrame(game.animationFrame);
+		Level.init();
+		Shader.init();
+		unit.init();
+		game.start();
 	};
+
+	var recordChestPos = function(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY) {
+		snakeChestPos = [snakeChestMapGridX, snakeChestMapGridY];
+		statueChestPos = [statueChestMapGridX, statueChestMapGridY];
+		tombChestPos = [tombChestMapGridX, tombChestMapGridY];
+	};
+
+	var initTrigger = function(trigger) {
+		var type = trigger.type;
+		if (type == 'timed') {
+			trigger.timeOut = setTimeout(function(){
+				runTrigger(trigger);
+			}, trigger.time);
+		} else if (type == 'conditional') {
+			trigger.interval = setInterval(function(){
+				runTrigger(trigger);
+			}, trigger.time)
+		}
+	};
+
+	var runTrigger = function(trigger) {
+		var type = trigger.type;
+		if (type == 'timed') {
+			trigger.action();
+		} else if (type == 'conditional') {
+			if (trigger.condition()) {
+				clearTrigger(trigger);
+				trigger.action();
+			}
+		}
+	};
+
+	var clearTrigger = function(trigger) {
+		var type = trigger.type;
+		if (type == 'timed') {
+			clearTimeout(trigger.timeOut);
+		} else if (type == 'conditional') {
+			clearInterval(trigger.interval);
+		}
+	}
 
 	var reset = function() {
 		needPanning = true;
-		weather = false;
+		fog = false;
 		chestList = [];
 		beingList = [];
 		curLevel = null;
@@ -1714,6 +2058,22 @@
 			el['on' + type] = null;
 		}
 	};
+
+	// var getStyles = function(elem, prop) {
+	// 	if (window.getComputedStyle) {
+	// 		if (prop) {
+	// 			return window.getComputedStyle(elem, null)[prop];
+	// 		} else {
+	// 			return window.getComputedStyle(elem, null);
+	// 		};
+	// 	} else {
+	// 		if (prop) {
+	// 			return elem.currentStyle[prop];
+	// 		} else {
+	// 			return elem.currentStyle;
+	// 		};
+	// 	};
+	// };
 
 	addEvent(window, 'load', function() {
 		function clickStart(e) {
