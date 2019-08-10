@@ -7,6 +7,10 @@
 		snakeChestPos = null,
 		statueChestPos = null,
 		tombChestPos = null,
+		chestList = null,
+		beingList = null,
+		curLevel = null,
+		lastStatus = null,
 		running = false,
 		musicOn = true,
 		pause = false,
@@ -23,12 +27,7 @@
 		animationTimeOut = 100,
 		rectTile = [352, 288],
 		chestImgPositions = [[0, 64], [160, 64], [320, 64]],
-		UIImgPos = [704, 64],
-		animationElementList = [],
-		chestList = [],
-		beingList = [],
-		curLevel = {},
-		lastStatus = {};
+		UIImgPos = [704, 64];
 
 	var game = {
 		botCanvas: document.getElementById('bot-canvas'),
@@ -114,7 +113,8 @@
 			var triggers = curLevel.triggers;
 			if (triggers.length !== 0) {
 				triggers.forEach(function(trigger){
-					initTrigger(trigger);
+					// console.log(this); // window
+					initTrigger(trigger, curLevel.triggers);
 				});
 			}
 			game.animate();
@@ -172,9 +172,9 @@
 		UIList: [], // for drawing
 		mouse: {},
 		init: function() {
-			this.mapButton = new ButtonElement({name: 'map', imgX: 704, imgY: 64, canvasX: canvasW - 128, canvasY: 0, width: 32, height: 32}),
-			this.pullBackButton = new ButtonElement({name: 'pullBack', imgX: 736, imgY: 64, canvasX: canvasW - 96, canvasY: 0, width: 32, height: 32}),
-			this.resumeButton = new ButtonElement({name: 'resume', imgX: 768, imgY: 64, canvasX: canvasW - 64, canvasY: 0, width: 32, height: 32}),
+			this.mapButton = new ButtonElement({name: 'map', imgX: 704, imgY: 64, canvasX: canvasW - 128, canvasY: 0, width: 32, height: 32});
+			this.pullBackButton = new ButtonElement({name: 'pullBack', imgX: 736, imgY: 64, canvasX: canvasW - 96, canvasY: 0, width: 32, height: 32});
+			this.resumeButton = new ButtonElement({name: 'resume', imgX: 768, imgY: 64, canvasX: canvasW - 64, canvasY: 0, width: 32, height: 32});
 			this.musicButton = new ButtonElement({name: 'music', imgX: 800, imgY: 96, canvasX: canvasW - 32, canvasY: 0, width: 32, height: 32, on: true});
 			this.initButtonList();
 			this.initUIList();
@@ -220,6 +220,9 @@
 		},
 
 		onMouseMove: function(e) {
+			if (Map.top) {
+				return;
+			}
 			var topCanvas = game.topCanvas,
 				mouse = UI.mouse,
 				selectedButton = UI.selectedButton,
@@ -308,19 +311,19 @@
 		statuePic: [608, 96],
 		tombPic: [672, 96],
 		token: {
-			lv1: {
+			'lv1': {
 				found: false,
 				finish: false
 			},
-			lv2: {
+			'lv2': {
 				found: false,
 				finish: false
 			},
-			lv3: {
+			'lv3': {
 				found: false,
 				finish: false
 			},
-			lv4: {
+			'lv4': {
 				found: false,
 				finish: false
 			}
@@ -341,46 +344,43 @@
 			topCtx.drawImage(game.map, 0, 0, 400, 384, 0, 0, 416, 384);
 			for (var lv in token) {
 				if (token[lv].found) {
-					console.log(lv + ' found');
 					switch (lv) {
 						case 'lv1':
-							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 197, 103, 32, 32);
-							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 201, 31, 32, 32);
+							topCtx.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 197, 103, 32, 32);
+							topCtx.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 201, 31, 32, 32);
+							console.log(this);
 							break;
 						case 'lv2':
-							console.log('mark');
-							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 73, 214, 32, 32);
-							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 77, 148, 32, 32);
+							topCtx.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 73, 214, 32, 32);
+							topCtx.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 77, 148, 32, 32);
 							break;
 						case 'lv3':
-							this.context.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 319, 166, 32, 32);
-							this.context.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 321, 94 , 32, 32);
+							topCtx.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 319, 166, 32, 32);
+							topCtx.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 321, 94 , 32, 32);
 							break;
 						case 'lv4':
-							this.context.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 221, 316, 32, 32);
-							this.context.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 225, 242, 32, 32);
+							topCtx.drawImage(game.sprite, this.tombPic[0], this.tombPic[1], 32, 32, 221, 316, 32, 32);
+							topCtx.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 225, 242, 32, 32);
 							break;
 					}
 				}
 				if (token[lv].finish) {
-					console.log(token[lv] + 'finish');
 					switch (lv) {
 						case 'lv1':
-							this.context.drawImage(game.map, 404, 0, 100, 100, 164, 12, 100, 100);
+							topCtx.drawImage(game.map, 404, 0, 100, 100, 164, 12, 100, 100);
 							break;
 						case 'lv2':
-							this.context.drawImage(game.map, 404, 0, 100, 100, 34, 132, 100, 100);
+							topCtx.drawImage(game.map, 404, 0, 100, 100, 34, 132, 100, 100);
 							break;
 						case 'lv3':
-							this.context.drawImage(game.map, 404, 0, 100, 100, 298, 84, 100, 100);
+							topCtx.drawImage(game.map, 404, 0, 100, 100, 298, 84, 100, 100);
 							break;
 						case 'lv4':
-							this.context.drawImage(game.map, 404, 0, 100, 100, 186, 232, 100, 100);
+							topCtx.drawImage(game.map, 404, 0, 100, 100, 186, 232, 100, 100);
 							break;
 					}
 				}
 			}
-			topCtx.drawImage(this.canvas, 0, 0);
 		}
 	};
 
@@ -415,12 +415,9 @@
 			if (!remain) {
 				game.chatTimeout = setTimeout(function(){
 					clearTimeout(game.chatTimeout);
-					game.chatTimeout;
-					conversation.chatting = false;
-					UI.initUIList();
-					needFleshUI = true;
-					// this.chatBox.remove();
-					conversation.container.removeChild(conversation.chatBox);
+					game.chatTimeout = null;
+					conversation.chatOver();
+					// conversation.container.removeChild(conversation.chatBox);
 				}, 1000);
 			}
 			UI.hideUI();
@@ -433,11 +430,28 @@
 				width = action.width,
 				height = action.height;
 			topCtx.drawImage(game[this.from], imgPos[0], imgPos[1], width, height, 0, canvasH - height, width, height);
+		},
+		chatOver: function() {
+			this.chatting = false;
+			this.chatBox.remove();
+			UI.showUI();
 		}
 	};
 
 	var title = {
+		container: document.getElementsByClassName('game-container')[0],
+		showLoadingScreen: function() {
+			var loadingScreen = document.createElement('div'),
+				outerCircle = document.createElement('div'),
+				innerCircle = document.createElement('div');
+			loadingScreen.className = 'loadingScreen';
+			loadingScreen.appendChild(outerCircle);
+			loadingScreen.appendChild(innerCircle);
+			container.appendChild(loadingScreen);
+		},
+		drawTitle: function() {
 
+		},
 	};
 
 	var animationLibrary = {
@@ -524,13 +538,11 @@
 		},
 
 		onKeyDown: function(e) {
-			if (levelComplish) {
+			if (levelComplish || conversation.chatting) {
 				ctrl.left = false;
 				ctrl.up = false;
 				ctrl.right = false;
 				ctrl.down = false;
-				return;
-			} else if (conversation.chatting) {
 				return;
 			}
 			e = e || window.event;
@@ -581,9 +593,22 @@
 			e = e || window.event;
 			switch (e.keyCode) {
 				case 120:
-					pullBack();
+					if (conversation.chatting) {
+						var triggers = curLevel.triggers;
+						while (triggers[triggers.length - 1]) {
+							if (triggers[triggers.length - 1].type == 'timed') {
+								clearTrigger(triggers[triggers.length - 1], triggers);
+							}
+						}
+						conversation.chatOver();
+					} else if (levelN !== 0) { // disable pullback in level 0
+						pullBack();
+					}
 					break;
 				case 114:
+					if (levelN == 0) { // disable 'R'eload in level 0
+						return;
+					}
 					game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
 					break;
 			};
@@ -598,6 +623,8 @@
 			curLevel = this.levels[levelN];
 			GWidth = curLevel.mapGridWidth;
 			GHeight = curLevel.mapGridHeight;
+			this.mapGridOffsetX = curLevel.mapGridOffsetX;
+			this.mapGridOffsetY = curLevel.mapGridOffsetY;
 			this.width = GWidth * tileSize;
 			this.height = GHeight * tileSize;
 			this.canvas.width = this.width;
@@ -646,24 +673,24 @@
 		computeBlock: function() {
 			var man = game.man;
 			if (ctrl.right) {
-				this.mapBlockX = Math.floor((man.mapX + man.width) / canvasW);
+				this.mapBlockX = Math.floor((man.mapX + man.width - 1) / canvasW);
 			} else {
 				this.mapBlockX = Math.floor(man.mapX / canvasW);
 			};
 			if (ctrl.down) {
-				this.mapBlockY = Math.floor((man.mapY + man.height) / canvasH);
+				this.mapBlockY = Math.floor((man.mapY + man.height - 1) / canvasH);
 			} else {
 				this.mapBlockY = Math.floor(man.mapY / canvasH);
 			};
-			this.border.left = this.mapBlockX * canvasW;
-			this.border.up = this.mapBlockY * canvasH;
-			this.border.right = this.border.left + canvasW;
-			this.border.down = this.border.up + canvasH;
-			console.log(this.mapBlockX, this.mapBlockY, this.border);
+			this.border.left = this.mapBlockX * canvasW + this.mapGridOffsetX * tileSize;
+			this.border.up = this.mapBlockY * canvasH + this.mapGridOffsetY * tileSize;
+			this.border.right = this.border.left + canvasW - 1;
+			this.border.down = this.border.up + canvasH - 1;
+			console.log(this.border.left, this.border.up, this.border.right, this.border.down);
 		},
 		
 		draw: function() {
-			botCtx.drawImage(this.canvas, this.mapBlockX * canvasW, this.mapBlockY * canvasH, canvasW, canvasH, 0, 0, canvasW, canvasH);
+			botCtx.drawImage(this.canvas, this.border.left, this.border.up, canvasW, canvasH, 0, 0, canvasW, canvasH);
 			needPanning = false;
 		},
 
@@ -712,83 +739,87 @@
 			// },
 			{
 				"mapName": "room0",
-				"mapGridWidth": 26,
-				"mapGridHeight": 12,
-				"born": {x: 19, y: 8},
-				"chests": [[17,3],[21,3],[19,5]],
+				"mapGridWidth": 28,
+				"mapGridHeight": 14,
+				"mapGridOffsetX": 1,
+				"mapGridOffsetY": 1,
+				"born": {x: 20, y: 9},
+				"chests": [[18,4],[22,4],[20,6]],
 				"chestImgPos": [0, 64],
-				"rects": [[19,2],[19,3]],
+				"rects": [[20,3],[20,4]],
 				"torches": [],
-				"mapObstructedTerrain":[],
+				"mapObstructedTerrain":[[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[8,0],[9,0],[10,0],[11,0],[12,0],[13,0],[14,0],[15,0],[16,0],[17,0],[18,0],[19,0],[20,0],[21,0],[22,0],[23,0],[24,0],[25,0],[26,0],[27,0],[0,1],[27,1],[0,2],[27,2],[0,3],[27,3],[0,4],[27,4],[0,5],[27,5],[0,6],[27,6],[0,7],[27,7],[0,8],[27,8],[0,9],[27,9],[0,10],[27,10],[0,11],[27,11],[0,12],[27,12],[0,13],[1,13],[2,13],[3,13],[4,13],[5,13],[6,13],[7,13],[8,13],[9,13],[10,13],[11,13],[12,13],[13,13],[14,13],[15,13],[16,13],[17,13],[18,13],[19,13],[20,13],[21,13],[22,13],[23,13],[24,13],[25,13],[26,13],[27,13]],
 				"terrain":[
-					[275,272,272,272,272,272,273,273,273,272,273,211,272,273,211,211,273,211,211,211,211,272,211,273,211,211],
-					[272,272,272,273,273,273,272,272,272,272,273,273,273,211,211,273,211,211,263,222,262,211,211,211,273,211],
-					[272,272,272,273,273,273,273,273,273,272,211,211,273,211,272,211,211,211,225,229,218,273,211,211,211,273],
-					[272,272,273,273,272,273,273,273,273,273,211,211,273,273,273,272,211,279,226,231,218,277,272,272,272,272],
-					[272,272,273,273,211,273,211,273,273,273,211,211,273,272,272,211,272,211,261,220,260,273,211,273,273,275],
-					[272,272,272,273,273,273,211,273,272,273,211,211,273,211,211,277,272,273,211,279,272,272,272,273,272,273],
-					[272,211,272,273,273,273,273,273,272,273,211,211,273,273,273,272,272,272,272,272,272,272,273,272,273,273],
-					[272,273,273,274,273,273,211,273,273,273,211,273,273,272,211,272,272,272,272,273,274,273,263,262,211,272],
-					[272,273,211,272,211,272,273,273,272,273,211,273,272,273,272,273,272,273,272,273,272,272,261,260,273,272],
-					[211,273,273,272,211,211,211,272,273,273,273,273,272,273,272,272,273,273,273,272,272,272,273,272,272,272],
-					[272,272,273,273,272,272,272,272,273,273,273,273,272,211,274,272,273,273,272,273,273,211,274,272,273,273],
-					[272,272,272,273,273,273,272,273,272,272,273,211,273,272,272,273,272,273,272,273,272,272,273,273,272,272]
+					[31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31],
+					[31,275,272,272,272,272,272,273,273,273,272,273,211,272,273,211,211,273,211,211,211,211,272,211,273,211,211,31],
+					[31,272,272,272,273,273,273,272,272,272,272,273,273,273,211,211,273,211,211,263,222,262,211,211,211,273,211,31],
+					[31,272,272,272,273,273,273,273,273,273,272,211,211,273,211,272,211,211,211,225,229,218,273,211,211,211,273,31],
+					[31,272,272,273,273,272,273,273,273,273,273,211,211,273,273,273,272,211,279,226,231,218,277,272,272,272,272,31],
+					[31,272,272,273,273,211,273,211,273,273,273,211,211,273,272,272,211,272,211,261,220,260,273,211,273,273,275,31],
+					[31,272,272,272,273,273,273,211,273,272,273,211,211,273,211,211,277,272,273,211,279,272,272,272,273,272,273,31],
+					[31,272,211,272,273,273,273,273,273,272,273,211,211,273,273,273,272,272,272,272,272,272,272,273,272,273,273,31],
+					[31,272,273,273,274,273,273,211,273,273,273,211,273,273,272,211,272,272,272,272,273,274,273,263,262,211,272,31],
+					[31,272,273,211,272,211,272,273,273,272,273,211,273,272,273,272,273,272,273,272,273,272,272,261,260,273,272,31],
+					[31,211,273,273,272,211,211,211,272,273,273,273,273,272,273,272,272,273,273,273,272,272,272,273,272,272,272,31],
+					[31,272,272,273,273,272,272,272,272,273,273,273,273,272,211,274,272,273,273,272,273,273,211,274,272,273,273,31],
+					[31,272,272,272,273,273,273,272,273,272,272,273,211,273,272,272,273,272,273,272,273,272,272,273,273,272,272,31],
+					[31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31]
 				],
 				"shade":{},
 				"weather": 'fog',
 				"triggers": [
 					{
-						"type": 'timed', "time": 1000,
+						"type": 'timed', "time": 1000, disposable: true,// "disposable" means it plays only one time.
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>......&#x8FDB;&#x6765;&#x4E86;&#x3002;</p>', true);
+							conversation.showChat('young', 'talk', '<p>......\u8fdb\u6765\u4e86\u3002</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 2000,
+						"type": "timed", "time": 2000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x5927;&#x9053;&#x4E0A;&#x5947;&#x602A;&#x96D5;&#x50CF;&#x4EA7;&#x751F;&#x7684;&#x5E7B;&#x5883;&#x3002;</p>', true);
+							conversation.showChat('young', 'talk', '<p>\u8def\u4e0a\u7684\u5947\u602a\u96d5\u50cf\u4ea7\u751f\u7684\u5e7b\u5883\u3002</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 3500,
+						"type": "timed", "time": 3500, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x53EA;&#x8981;&#x628A;&#x5B83;&#x4EEC;&#x6D88;&#x9664;&#xFF0C;&#x4ECA;&#x5929;&#x7684;&#x996D;&#x94B1;&#x5C31;&#x6709;&#x7740;&#x843D;&#x5566;&#xFF01;</p>', true);
+							conversation.showChat('young', 'talk', '<p>\u53ea\u8981\u628a\u5b83\u4eec\u6d88\u9664\uff0c\u4eca\u5929\u7684\u996d\u94b1\u5c31\u6709\u7740\u843d\u5566\uff01</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 5000,
+						"type": "timed", "time": 5000, disposable: true,
 						"action": function() {
 							conversation.showChat('young', 'talk', '<p>......</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 6000,
+						"type": "timed", "time": 6000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x8BDD;&#x8BF4;&#xFF0C;&#x6700;&#x8FD1;&#x5C0F;&#x9547;&#x56DB;&#x5468;&#x51FA;&#x73B0;&#x7684;&#x8FD9;&#x4E9B;&#x96D5;&#x50CF;&#xFF0C;&#x6BCF;&#x5929;&#x6570;&#x91CF;&#x4F3C;&#x4E4E;&#x662F;&#x4E00;&#x5B9A;&#x7684;&#x3002; </p>', true);
+							conversation.showChat('young', 'talk', '<p>\u8bdd\u8bf4\uff0c\u6700\u8fd1\u5c0f\u9547\u56db\u5468\u51fa\u73b0\u7684\u8fd9\u4e9b\u96d5\u50cf\uff0c\u6bcf\u5929\u6570\u91cf\u4f3c\u4e4e\u662f\u4e00\u5b9a\u7684\u3002</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 9000,
+						"type": "timed", "time": 9000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x5B83;&#x4EEC;&#x4EA7;&#x751F;&#x7684;&#x5E7B;&#x5883;&#x867D;&#x4E0D;&#x81F3;&#x4E8E;&#x5371;&#x6025;&#x5C45;&#x6C11;&#x7684;&#x5B89;&#x5168;&#xFF0C;&#x4F46;&#x7ECF;&#x5E38;&#x628A;&#x65E9;&#x6668;&#x5916;&#x51FA;&#x7684;&#x5546;&#x4EBA;&#x7ED9;&#x56F0;&#x4F4F;&#xFF0C;&#x56E0;&#x6B64;&#x5236;&#x9020;&#x4E86;&#x4E0D;&#x5C0F;&#x7684;&#x9EBB;&#x70E6;&#x3002;</p>', true);
+							conversation.showChat('young', 'talk', '<p>\u5b83\u4eec\u4ea7\u751f\u7684\u5e7b\u5883\u867d\u4e0d\u81f3\u4e8e\u5371\u6025\u5c45\u6c11\u7684\u5b89\u5168\uff0c\u4f46\u7ecf\u5e38\u628a\u65e9\u6668\u5916\u51fa\u7684\u5546\u4eba\u7ed9\u56f0\u4f4f\uff0c\u56e0\u6b64\u5236\u9020\u4e86\u4e0d\u5c0f\u7684\u9ebb\u70e6\u3002</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 12000,
+						"type": "timed", "time": 12000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x8FD9;&#x4E9B;&#x96D5;&#x50CF;&#x4F55;&#x65F6;&#x624D;&#x80FD;&#x5B8C;&#x5168;&#x6D88;&#x5931;&#x5462;......</p>', true);
+							conversation.showChat('young', 'talk', '<p>\u8fd9\u4e9b\u96d5\u50cf\u4f55\u65f6\u624d\u80fd\u5b8c\u5168\u6d88\u5931\u5462......</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 14000,
+						"type": "timed", "time": 14000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'talk', '<p>&#x60F3;&#x5565;&#x5462;&#xFF0C;&#x5230;&#x90A3;&#x5929;&#x53C8;&#x5F97;&#x91CD;&#x65B0;&#x627E;&#x4E8B;&#x505A;&#x4E86;&#x3002;&#x8D76;&#x5FEB;&#x5F00;&#x59CB;&#x5427;&#x3002;</p>', true);
+							conversation.showChat('young', 'talk', '<p>\u5230\u90a3\u5929\u53c8\u5f97\u91cd\u65b0\u627e\u4e8b\u505a\u4e86\u3002\u5148\u89e3\u51b3\u6389\u8fd9\u51e0\u4e2a\u5427\u3002</p>', true);
 						}
 					},
 					{
-						"type": "timed", "time": 17000,
+						"type": "timed", "time": 17000, disposable: true,
 						"action": function() {
-							conversation.showChat('young', 'release', '&#xFF08;...&#x91CA;&#x653E;&#x4FE1;&#x4F7F;...&#xFF09;', false);
+							conversation.showChat('young', 'release', '<p>\uff08...\u91ca\u653e\u4fe1\u4f7f...\uff09</p>', false);
 							game.man.processOrder('play', {});
 						}
 					}
@@ -798,6 +829,8 @@
 				"mapName": "room1",
 				"mapGridWidth":13,
 				"mapGridHeight":12,
+				"mapGridOffsetX": 0,
+				"mapGridOffsetY": 0,
 				"born": {x: 10, y: 6},
 				"chests":[[4,6],[9,6],[4,7],[8,7],[9,7],[9,8]],
 				"chestImgPos": [0, 64],
@@ -844,6 +877,8 @@
 				"mapName": "room2",
 				"mapGridWidth":13,
 				"mapGridHeight":12,
+				"mapGridOffsetX": 0,
+				"mapGridOffsetY": 0,
 				"born": {x: 11, y: 5},
 				"chests":[[10,5],[3,6],[4,6],[5,6],[6,6],[7,6],[8,6],[10,6],[10,7]],
 				"chestImgPos": [160, 64],
@@ -890,6 +925,8 @@
 				"mapName": "room3",
 				"mapGridWidth": 13,
 				"mapGridHeight": 12,
+				"mapGridOffsetX": 0,
+				"mapGridOffsetY": 0,
 				"born": {x: 7, y: 6},
 				"chests":[[6,5],[7,5],[8,5],[6,6],[8,6],[6,7],[7,7],[8,7]],
 				"chestImgPos": [0, 64],
@@ -936,6 +973,8 @@
 				"mapName": "room4",
 				"mapGridWidth":13,
 				"mapGridHeight":12,
+				"mapGridOffsetX": 0,
+				"mapGridOffsetY": 0,
 				"born": {x: 6, y: 4},
 				"chests":[[5,5],[7,5],[4,6],[6,6],[8,6],[5,7],[7,7],[4,8],[6,8],[8,8],[5,9],[7,9]],
 				"chestImgPos": [320, 64],
@@ -1068,6 +1107,9 @@
 				chest,
 				man,
 				oItem;
+			chestList = [];
+			beingList = [];
+			lastStatus = {};
 
 			for (var mapGridCoor of torches) {
 				oItem = {mapX: mapGridCoor[0] * tileSize, mapY: mapGridCoor[1] * tileSize};
@@ -1204,14 +1246,14 @@
 				frameHeight = this.frameHeight,
 				imgPos = this.imgPos,
 				drawingInterpolationFactor = game.drawingInterpolationFactor,
-				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]],
-				canvasX = this.mapX - this.pixelOffsetX - border.left - drawingInterpolationFactor * this.lastMovementX,
-				canvasY = this.mapY - this.pixelOffsetY - border.up - drawingInterpolationFactor * this.lastMovementY;
+				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]];
+			this.canvasX = this.mapX - this.pixelOffsetX - border.left - drawingInterpolationFactor * this.lastMovementX;
+			this.canvasY = this.mapY - this.pixelOffsetY - border.up - drawingInterpolationFactor * this.lastMovementY;
 
 			if (this.type == 'human') {
-				this.drawShadow(canvasX + 32, canvasY + 64, 10, 3);
+				this.drawShadow(this.canvasX + 32, this.canvasY + 64, 10, 3);
 			}
-			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, canvasX, canvasY, frameWidth, frameHeight);
+			stageCtx.drawImage(game.sprite,  spritePos[0], spritePos[1], frameWidth, frameHeight, this.canvasX, this.canvasY, frameWidth, frameHeight);
 		},
 
 		intersects: function(rectObj) {
@@ -1264,7 +1306,7 @@
 		box: {
 			marginLeft: 3,
 			marginRight: 3,
-			marginUp: 10,
+			marginUp: 20,
 			marginDown: 0
 		},
 
@@ -1378,7 +1420,7 @@
 				grid,
 				nOfChests,
 				chest;
-
+			// console.log(this.mapX, this.mapY);
 			if (!(up || down || left || right)) { // no keyboard input
 				if (act !== 'standL' && act !== 'standR') { // not standing
 					if (act !== 'playL' && act !== 'playR') { // not playing
@@ -1400,12 +1442,6 @@
 						speed = this.speed * sin45;
 					};
 					this.mapX -= speed;
-					if (this.mapX < Level.border.left) { // move out of canvas
-						if (this.mapX < 0) { // move out of map
-							this.mapX = Level.width - this.box.marginLeft; // transport to right of map
-						};
-						needPanning = true;
-					};
 					chests = this.intersectWithChest();
 					grid = this.intersectWithWall();
 					nOfChests = chests.length;
@@ -1421,6 +1457,12 @@
 						};
 						this.processOrder('pushBox', {dir: 'left', interObj: chest});
 					};
+					if (this.mapX < Level.border.left) { // move out of canvas
+						// if (this.mapX < 0) { // move out of map
+						// 	this.mapX = 0;
+						// };
+						needPanning = true;
+					};
 				};
 				if (right) {
 					if (act !== 'walkR') {
@@ -1430,12 +1472,6 @@
 						speed = this.speed * sin45;
 					};
 					this.mapX += speed;
-					if (this.mapX + this.width > Level.border.right) {
-						if (this.mapX + this.width > Level.width) {
-							this.mapX = -this.width + this.box.marginRight;
-						};
-						needPanning = true;
-					};
 					chests = this.intersectWithChest();
 					grid = this.intersectWithWall();
 					nOfChests = chests.length;
@@ -1451,6 +1487,12 @@
 						};
 						this.processOrder('pushBox', {dir: 'right', interObj: chest});
 					};
+					if (this.mapX + this.width - 1 > Level.border.right) {
+						// if (this.mapX + this.width - 1 > Level.width) {
+						// 	this.mapX = -this.width + Level.width + 1;
+						// };
+						needPanning = true;
+					};
 				};
 				if (up) {
 					if (act !== 'walkL' && act !== 'walkR') {
@@ -1460,12 +1502,6 @@
 						speed = this.speed * sin45;
 					};
 					this.mapY -= speed;
-					if (this.mapY < Level.border.up) {
-						if (this.mapY < 0) {
-							this.mapY = Level.height - this.box.marginUp;
-						};
-						needPanning = true;
-					};
 					chests = this.intersectWithChest();
 					grid = this.intersectWithWall();
 					nOfChests = chests.length;
@@ -1481,6 +1517,12 @@
 						};
 						this.processOrder('pushBox', {dir: 'up', interObj: chest});
 					};
+					if (this.mapY < Level.border.up) {
+						// if (this.mapY < 0) {
+						// 	this.mapY = 0;
+						// };
+						needPanning = true;
+					};
 				};
 				if (down) {
 					if (act !== 'walkL' && act !== 'walkR') {
@@ -1490,12 +1532,6 @@
 						speed = this.speed * sin45;
 					};
 					this.mapY += speed;
-					if (this.mapY + this.height > Level.border.down) {
-						if (this.mapY  + this.height > Level.height) {
-							this.mapY = -this.height + this.box.marginDown;
-						};
-						needPanning = true;
-					};
 					chests = this.intersectWithChest();
 					grid = this.intersectWithWall();
 					nOfChests = chests.length;
@@ -1510,6 +1546,12 @@
 							this.mapY = chest.mapY - this.height;
 						};
 						this.processOrder('pushBox', {dir: 'down', interObj: chest});
+					};
+					if (this.mapY + this.height - 1 > Level.border.down) {
+						// if (this.mapY  + this.height > Level.height) {
+						// 	this.mapY = -this.height + Level.height + 1;
+						// };
+						needPanning = true;
 					};
 				};
 				this.lastMovementX = this.mapX - this.lastMapX;
@@ -1607,10 +1649,10 @@
 						if (this.mapY - 2 <= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
-							if (this.mapGridY < 0) {
-								this.mapGridY = curLevel.mapGridHeight - 1;
-								this.mapY = this.mapGridY * tileSize + this.box.marginUp;
-							};
+							// if (this.mapGridY < 0) {
+							// 	this.mapGridY = curLevel.mapGridHeight - 1;
+							// 	this.mapY = this.mapGridY * tileSize + this.box.marginUp;
+							// };
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1647,10 +1689,10 @@
 						if (this.mapY + 2 >= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
-							if (this.mapGridY >= curLevel.mapGridHeight) {
-								this.mapGridY = 0;
-								this.mapY = this.mapGridY * tileSize + this.box.marginUp;
-							};
+							// if (this.mapGridY >= curLevel.mapGridHeight) {
+							// 	this.mapGridY = 0;
+							// 	this.mapY = this.mapGridY * tileSize + this.box.marginUp;
+							// };
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1687,10 +1729,10 @@
 						if (this.mapX - 2 <= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
-							if (this.mapGridX < 0) {
-								this.mapGridX = curLevel.mapGridWidth - 1;
-								this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
-							};
+							// if (this.mapGridX < 0) {
+							// 	this.mapGridX = curLevel.mapGridWidth - 1;
+							// 	this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
+							// };
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1727,10 +1769,10 @@
 						if (this.mapX + 2 >= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
-							if (this.mapGridX >= curLevel.mapGridWidth) {
-								this.mapGridX = 0;
-								this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
-							};
+							// if (this.mapGridX >= curLevel.mapGridWidth) {
+							// 	this.mapGridX = 0;
+							// 	this.mapX = this.mapGridX * tileSize + this.box.marginLeft;
+							// };
 							this.arrive = true;
 							this.updateOnRect();
 							if (this.onRect) {
@@ -1852,6 +1894,13 @@
 		};
 	};
 
+	// var outOfMap = function(obj) {
+	// 	var box = obj.box;
+	// 	if (obj.mapX - box.marginLeft < 0 || obj.mapX + obj.width >= Level.width + 1 || obj.mapY <= box.marginUp || obj.mapY + obj.height >= Level.height + 1) {
+	// 		return true;
+	// 	}
+	// };
+
 	var checkAllInPlace = function() {
 		for (var chest of chestList) {
 			if (!chest.onRect) {
@@ -1864,15 +1913,15 @@
 				Map['token']['lv1'].finish = true;
 				break;
 			case 2:
-				Level.levels[1].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
 				Map['token']['lv2'].finish = true;
 				break;
 			case 3:
-				Level.levels[2].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
 				Map['token']['lv3'].finish = true;
 				break;
 			case 4:
-				Level.levels[3].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
 				Map['token']['lv4'].finish = true;
 				break;
 		};
@@ -1901,19 +1950,19 @@
 				game.switchTimeout = setTimeout(function(){switchLevel(1);}, 1000);
 			}
 		} else if (statueChestMapGridX == downRect[0] && statueChestMapGridY == downRect[1] && snakeChestMapGridX == upRect[0] && snakeChestMapGridY == upRect[1]) {
-			if (!Map.token['lv1'].finish) {
+			if (!Map.token['lv2'].finish) {
 				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
 				levelComplish = true;
 				game.switchTimeout = setTimeout(function(){switchLevel(2);}, 1000);
 			}
 		} else if (snakeChestMapGridX == downRect[0] && snakeChestMapGridY == downRect[1] && tombChestMapGridX == upRect[0] && tombChestMapGridY == upRect[1]) {
-			if (!Map.token['lv1'].finish) {
+			if (!Map.token['lv3'].finish) {
 				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
 				levelComplish = true;
 				game.switchTimeout = setTimeout(function(){switchLevel(3);}, 1000);
 			}
 		} else if (tombChestMapGridX == downRect[0] && tombChestMapGridY == downRect[1] && statueChestMapGridX == upRect[0] && statueChestMapGridY == upRect[1]) {
-			if (!Map.token['lv1'].finish) {
+			if (!Map.token['lv4'].finish) {
 				recordChestPos(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY);
 				levelComplish = true;
 				game.switchTimeout = setTimeout(function(){switchLevel(4);}, 1000);
@@ -1929,7 +1978,11 @@
 			if (!canPullBack) {
 				return;
 			};
-			lastChest = lastStatus.chest;
+			if (isEmpty(lastStatus)) {
+				return;
+			} else {
+				lastChest = lastStatus.chest;
+			}
 			lastDir = lastStatus.dir;
 			man = game.man;
 			prePosition = lastChest.prePosition;
@@ -1990,51 +2043,76 @@
 		game.start();
 	};
 
+	var isEmpty = function(obj) {
+		for (var prop in obj) {
+			if (obj.hasOwnProperty(prop)) {
+				return false;
+			}
+		}
+		return true;
+	};
+
 	var recordChestPos = function(snakeChestMapGridX, snakeChestMapGridY, statueChestMapGridX, statueChestMapGridY, tombChestMapGridX, tombChestMapGridY) {
 		snakeChestPos = [snakeChestMapGridX, snakeChestMapGridY];
 		statueChestPos = [statueChestMapGridX, statueChestMapGridY];
 		tombChestPos = [tombChestMapGridX, tombChestMapGridY];
 	};
 
-	var initTrigger = function(trigger) {
+	var initTrigger = function(trigger, from) {
 		var type = trigger.type;
 		if (type == 'timed') {
 			trigger.timeOut = setTimeout(function(){
-				runTrigger(trigger);
+				runTrigger(trigger, from);
 			}, trigger.time);
 		} else if (type == 'conditional') {
 			trigger.interval = setInterval(function(){
-				runTrigger(trigger);
+				runTrigger(trigger, from);
 			}, trigger.time)
 		}
 	};
 
-	var runTrigger = function(trigger) {
+	var runTrigger = function(trigger, from) {
 		var type = trigger.type;
 		if (type == 'timed') {
+			clearTrigger(trigger, from);
 			trigger.action();
 		} else if (type == 'conditional') {
 			if (trigger.condition()) {
-				clearTrigger(trigger);
+				clearTrigger(trigger, from);
 				trigger.action();
 			}
 		}
 	};
 
-	var clearTrigger = function(trigger) {
+	var clearTrigger = function(trigger, from) {
 		var type = trigger.type;
 		if (type == 'timed') {
-			clearTimeout(trigger.timeOut);
+			if (trigger.timeOut !== null) {
+				clearTimeout(trigger.timeOut);
+				trigger.timeOut = null;
+			}
 		} else if (type == 'conditional') {
-			clearInterval(trigger.interval);
+			if (trigger.interval !== null) {
+				clearInterval(trigger.interval);
+				trigger.interval = null;
+			}
 		}
-	}
+		if (trigger.disposable) {
+			delElem(trigger, from);
+		}
+	};
+
+	var delElem = function(elem, from) {
+		var index = from.indexOf(elem);
+		from.splice(index, 1);
+	};
 
 	var reset = function() {
 		needPanning = true;
 		fog = false;
-		chestList = [];
-		beingList = [];
+		chestList = null;
+		beingList = null;
+		lastStatus = null;
 		curLevel = null;
 		game.man = null;
 	};
@@ -2077,7 +2155,7 @@
 
 	addEvent(window, 'load', function() {
 		function clickStart(e) {
-			game.setup.call(game);
+			game.setup();
 			removeEvent(container, 'click', clickStart);
 		};
 		var container = document.getElementsByClassName('game-container')[0];
