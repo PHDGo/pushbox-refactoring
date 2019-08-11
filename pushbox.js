@@ -19,6 +19,7 @@
 		needFleshUI = true,
 		fog = false,
 		levelComplish = false,
+		lastPushSoundPlayTime = 0,
 		canvasW = 0,
 		canvasH = 0,
 		levelN = 0,
@@ -117,13 +118,16 @@
 					initTrigger(trigger, curLevel.triggers);
 				});
 			}
+
 			game.animate();
 			animationLoop = setInterval(game.animate, animationTimeOut);
+			playSound('bgm');
 
 			Level.computeBlock(); // must after unit.init()
 			Level.yeildMapImg(); // must after loader.init()
 			UI.draw();
 			game.draw();
+
 		}
 	};
 
@@ -159,8 +163,14 @@
 		},
 
 		toogle: function() {
-			this.imgY = this.on ? 64 : 96;
-			this.on = this.on ? false: true;
+			if (this.on) {
+				game.bgm.pause();
+				this.on = false;
+			} else {
+				playSound('bgm');
+				this.on = true;
+			}
+			this.imgY = this.on ? 96 : 64;
 			needFleshUI = true;
 		}
 	};
@@ -294,6 +304,7 @@
 				selectedButton.switchImgTo('unselected');
 				selectedButton = null;
 			}
+			playSound('clickSound');
 			removeEvent(game.topCanvas, 'mouseup', UI.onMouseUp);
 		},
 
@@ -466,9 +477,10 @@
 			{name:'tileSet', url:'image/tileSet', ext:'.png'},
 			{name:'sprite', url:'image/sprite', ext:'.png'},
 			{name:'clickSound', url:'sound/click', ext:'.wav'},
-			// {name:'bgm', url:'sound/V.A. - Toroko\'s Theme', ext:'.mp3'},
+			{name:'push', url:'sound/push', ext:'.ogg'},
+			{name:'bgm', url:'sound/bgm', ext:'.wav'},
 			{name:'footstepSound', url:'sound/footstep', ext:'.wav'},
-			{name:'playSound', url:'sound/play', ext:'.wav'},
+			{name:'release', url:'sound/release', ext:'.wav'},
 			{name:'map', url:'image/map', ext:'.png'},
 			{name:'young', url:'image/charactor_young', ext:'.png'},
 			// {name:'correctSound', url:'sound/correct', ext:'.wav'},
@@ -1358,6 +1370,7 @@
 			switch (order) {
 				case 'pushBox':
 					details.interObj.processOrder('move', details);
+					playSound('push');
 					break;
 				case 'stand':
 					if (details.faceTo) { this.faceTo = details.faceTo }
@@ -1378,6 +1391,7 @@
 					else { details.faceTo = this.faceTo };
 					nextAct = 'play' + details.faceTo;
 					this.nextAct = nextAct;
+					playSound('release');
 					break;
 			}
 		},
@@ -1432,6 +1446,7 @@
 				this.lastMovementX = 0;
 				this.lastMovementY = 0;
 			} else {
+				playSound('footstepSound');
 				this.lastMapX = this.mapX;
 				this.lastMapY = this.mapY;
 				if (left) {
@@ -2106,6 +2121,28 @@
 		var index = from.indexOf(elem);
 		from.splice(index, 1);
 	};
+
+	var playSound = function(sound) {
+		if (sound == 'push') {
+			if (lastPushSoundPlayTime) {
+				var curTime = Date.now(),
+					interval = curTime - lastPushSoundPlayTime;
+				if (interval > 700) {
+					game[sound].pause();
+					game[sound].currentTime = 0;
+					game[sound].play();
+					lastPushSoundPlayTime = curTime;
+					return;
+				}
+			} else {
+				lastPushSoundPlayTime = Date.now();
+			}
+		} else if (sound !== 'footstepSound') {
+			game[sound].pause();
+			game[sound].currentTime = 0;
+		}
+		game[sound].play();
+	}
 
 	var reset = function() {
 		needPanning = true;
