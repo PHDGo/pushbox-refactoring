@@ -127,7 +127,6 @@
 			Level.yeildMapImg(); // must after loader.init()
 			UI.draw();
 			game.draw();
-
 		}
 	};
 
@@ -1370,7 +1369,6 @@
 			switch (order) {
 				case 'pushBox':
 					details.interObj.processOrder('move', details);
-					playSound('push');
 					break;
 				case 'stand':
 					if (details.faceTo) { this.faceTo = details.faceTo }
@@ -1646,6 +1644,7 @@
 							interGrid = wallOnGrid(nextGrid);
 							interChest = chestOnGrid(nextGrid);
 							if (!interGrid && !interChest) {
+								playSound('push');
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
 								this.prePosition.mapGridY = this.mapGridY;
@@ -1686,6 +1685,7 @@
 							interGrid = wallOnGrid(nextGrid);
 							interChest = chestOnGrid(nextGrid);
 							if (!interGrid && !interChest) {
+								playSound('push');
 								this.nextMapGridY = nextMapGridY;
 								this.nextY = this.nextMapGridY * tileSize + this.box.marginUp;
 								this.prePosition.mapGridY = this.mapGridY;
@@ -1726,6 +1726,7 @@
 							interGrid = wallOnGrid(nextGrid);
 							interChest = chestOnGrid(nextGrid);
 							if (!interGrid && !interChest) {
+								playSound('push');
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
 								this.prePosition.mapGridX = this.mapGridX;
@@ -1766,6 +1767,7 @@
 							interGrid = wallOnGrid(nextGrid);
 							interChest = chestOnGrid(nextGrid);
 							if (!interGrid && !interChest) {
+								playSound('push');
 								this.nextMapGridX = nextMapGridX;
 								this.nextX = this.nextMapGridX * tileSize + this.box.marginLeft;
 								this.prePosition.mapGridX = this.mapGridX;
