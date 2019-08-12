@@ -1357,8 +1357,8 @@
 		],
 
 		box: {
-			marginLeft: 3,
-			marginRight: 3,
+			marginLeft: 8,
+			marginRight: 8,
 			marginUp: 20,
 			marginDown: 0
 		},
@@ -1486,7 +1486,7 @@
 				this.lastMovementX = 0;
 				this.lastMovementY = 0;
 			} else {
-				playSound('footstepSound');
+				// playSound('footstepSound');
 				this.lastMapX = this.mapX;
 				this.lastMapY = this.mapY;
 				if (left) {
