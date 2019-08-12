@@ -20,6 +20,7 @@
 		fog = false,
 		levelComplish = false,
 		lastPushSoundPlayTime = 0,
+		lastFootStepSoundPlayTime = 0,
 		canvasW = 0,
 		canvasH = 0,
 		levelN = 0,
@@ -60,6 +61,9 @@
 		animate: function() {
 			unit.animate();
 			Shader.switchShadersAlpha();
+			if (game.bgm.currentTime == '124.88') {
+				playSound('bgm');
+			}
 			if (fog) {
 				Fog.animate();
 			}
@@ -104,15 +108,10 @@
 
 		start: function(ev) {
 			// game.topCanvas.focus();
-
-			// if (game.musicOn) {
-			// 	game.bgm.currentTime = 0;
-			// 	game.bgm.play();
-			// }
-			// gameStart = true;
 			running = true;
+
 			var triggers = curLevel.triggers;
-			if (triggers.length !== 0) {
+			if (triggers.length !== 0) { // empty array raise Error: triggers.forEach is not a function
 				triggers.forEach(function(trigger){
 					// console.log(this); // window
 					initTrigger(trigger, curLevel.triggers);
@@ -127,6 +126,112 @@
 			Level.yeildMapImg(); // must after loader.init()
 			UI.draw();
 			game.draw();
+		}
+	};
+
+	var ctrl = {
+		left: false,
+		right: false,
+		up: false,
+		down: false,
+
+		init: function() {
+			addEvent(window, 'keydown', this.onKeyDown);
+			addEvent(window, 'keyup', this.onKeyUp);
+			addEvent(window, 'keypress', this.onKeyPress);
+		},
+
+		onKeyDown: function(e) {
+			if (levelComplish || conversation.chatting) {
+				ctrl.left = false;
+				ctrl.up = false;
+				ctrl.right = false;
+				ctrl.down = false;
+				return;
+			}
+			e = e || window.event;
+			switch (e.keyCode) {
+				case 37:
+					ctrl.left = true;
+					break;
+				case 38:
+					ctrl.up = true;
+					break;
+				case 39:
+					ctrl.right = true;
+					break;
+				case 40:
+					ctrl.down = true;
+					break;
+				case 90:
+					game.man.speed = 16;
+					break;
+			};
+		},
+
+		onKeyUp: function(e) {
+			e = e || window.event;
+			switch (e.keyCode) {
+				case 37:
+					ctrl.left = false;
+					break;
+				case 38:
+					ctrl.up = false;
+					break;
+				case 39:
+					ctrl.right = false;
+					break;
+				case 40:
+					ctrl.down = false;
+					break;
+				case 90:
+					game.man.speed = 8;
+					break;
+			};
+		},
+
+		onKeyPress: function(e) {
+			if (levelComplish) {
+				return;
+			}
+			e = e || window.event;
+			// console.log(e.keyCode);
+			switch (e.keyCode) {
+				case 120:
+					if (conversation.chatting) {
+						var triggers = curLevel.triggers,
+							// triggers = deepCopy(curLevel.triggers),
+							index = triggers.length - 1;
+						while (index >= 0) {
+							if (triggers[index].type == 'timed') {
+								clearTrigger(triggers[index], triggers);
+							} else {
+								delElem(triggers[index], triggers);
+							}
+							index -= 1;
+						}
+						conversation.chatOver();
+					// } else if (levelN !== 0) { // disable pullback in level 0
+					} else {
+						pullBack();
+					}
+					break;
+				case 114:
+					// if (levelN == 0) { // disable 'R'eload in level 0
+					// 	return;
+					// }
+					game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
+					break;
+				case 113:
+					Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
+					if (levelN !== 0) {
+						Map['token']['lv'+levelN].found = true;
+						Map['token']['lv'+levelN].finish = true;
+					}
+					levelComplish = true;
+					game.switchTimeout = setTimeout(function(){switchLevel(0);}, 1000);
+					break;
+			};
 		}
 	};
 
@@ -358,7 +463,7 @@
 						case 'lv1':
 							topCtx.drawImage(game.sprite, this.snakePic[0], this.snakePic[1], 32, 32, 197, 103, 32, 32);
 							topCtx.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 201, 31, 32, 32);
-							console.log(this);
+							// console.log(this);
 							break;
 						case 'lv2':
 							topCtx.drawImage(game.sprite, this.statuePic[0], this.statuePic[1], 32, 32, 73, 214, 32, 32);
@@ -428,7 +533,7 @@
 					game.chatTimeout = null;
 					conversation.chatOver();
 					// conversation.container.removeChild(conversation.chatBox);
-				}, 1000);
+				}, 3000);
 			}
 			UI.hideUI();
 			UI.UIList.push(conversation);
@@ -482,8 +587,8 @@
 			{name:'release', url:'sound/release', ext:'.wav'},
 			{name:'map', url:'image/map', ext:'.png'},
 			{name:'young', url:'image/charactor_young', ext:'.png'},
-			// {name:'correctSound', url:'sound/correct', ext:'.wav'},
-			// {name:'winSound', url:'sound/win', ext:'.wav'}
+			{name:'correctSound', url:'sound/correct', ext:'.wav'},
+			{name:'winSound', url:'sound/win', ext:'.wav'}
 		],
 
 		init: function() {
@@ -533,96 +638,6 @@
 				// hideScreen('loadingScreen');
 				// showScreen('gameStartScreen');
 			}
-		}
-	};
-
-	var ctrl = {
-		left: false,
-		right: false,
-		up: false,
-		down: false,
-
-		init: function() {
-			addEvent(window, 'keydown', this.onKeyDown);
-			addEvent(window, 'keyup', this.onKeyUp);
-			addEvent(window, 'keypress', this.onKeyPress);
-		},
-
-		onKeyDown: function(e) {
-			if (levelComplish || conversation.chatting) {
-				ctrl.left = false;
-				ctrl.up = false;
-				ctrl.right = false;
-				ctrl.down = false;
-				return;
-			}
-			e = e || window.event;
-			switch (e.keyCode) {
-				case 37:
-					ctrl.left = true;
-					break;
-				case 38:
-					ctrl.up = true;
-					break;
-				case 39:
-					ctrl.right = true;
-					break;
-				case 40:
-					ctrl.down = true;
-					break;
-				case 90:
-					game.man.speed = 16;
-					break;
-			};
-		},
-
-		onKeyUp: function(e) {
-			e = e || window.event;
-			switch (e.keyCode) {
-				case 37:
-					ctrl.left = false;
-					break;
-				case 38:
-					ctrl.up = false;
-					break;
-				case 39:
-					ctrl.right = false;
-					break;
-				case 40:
-					ctrl.down = false;
-					break;
-				case 90:
-					game.man.speed = 8;
-					break;
-			};
-		},
-
-		onKeyPress: function(e) {
-			if (levelComplish) {
-				return;
-			}
-			e = e || window.event;
-			switch (e.keyCode) {
-				case 120:
-					if (conversation.chatting) {
-						var triggers = curLevel.triggers;
-						while (triggers[triggers.length - 1]) {
-							if (triggers[triggers.length - 1].type == 'timed') {
-								clearTrigger(triggers[triggers.length - 1], triggers);
-							}
-						}
-						conversation.chatOver();
-					} else if (levelN !== 0) { // disable pullback in level 0
-						pullBack();
-					}
-					break;
-				case 114:
-					if (levelN == 0) { // disable 'R'eload in level 0
-						return;
-					}
-					game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
-					break;
-			};
 		}
 	};
 
@@ -697,7 +712,7 @@
 			this.border.up = this.mapBlockY * canvasH + this.mapGridOffsetY * tileSize;
 			this.border.right = this.border.left + canvasW - 1;
 			this.border.down = this.border.up + canvasH - 1;
-			console.log(this.border.left, this.border.up, this.border.right, this.border.down);
+			// console.log(this.border.left, this.border.up, this.border.right, this.border.down);
 		},
 		
 		draw: function() {
@@ -832,6 +847,21 @@
 						"action": function() {
 							conversation.showChat('young', 'release', '<p>\uff08...\u91ca\u653e\u4fe1\u4f7f...\uff09</p>', false);
 							game.man.processOrder('play', {});
+						}
+					},
+					{
+						"type": "conditional", 'time': 2000, disposable: false,
+						"condition": function() {
+							var token = Map.token;
+							for (var lv in token) {
+								if (!token[lv].finish) {
+									return false;
+								}
+							}
+							return true;
+						},
+						"action": function() {
+							conversation.showChat('young', 'release', '<p>\u5927\u7ed3\u5c40\uff01\u5443\u002e\u002e\u002e\u002e\u002e\u002e\u6682\u65f6\u53ea\u6709\u8fd9\u4e48\u591a\u5185\u5bb9\uff0c\u611f\u8c22\u8bd5\u73a9\uff01</p>', false);
 						}
 					}
 				]
@@ -1813,12 +1843,16 @@
 			var startIndex;
 			switch (order) {
 				case 'move':
+					if (this.dir) {
+						return;
+					}
 					this.dir = details.dir;
 					break;
 				case 'stand':
 					this.nextAct = 'stand';
 					break;
 				case 'inPlace':
+					playSound('correctSound');
 					this.nextAct = 'inPlace';
 					break;
 				case 'onRect':
@@ -1924,6 +1958,7 @@
 				return;
 			};
 		};
+		playSound('winSound');
 		switch (levelN) {
 			case 1:
 				Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
@@ -2036,6 +2071,10 @@
 		game.switchTimeout = null;
 		running = false;
 		levelComplish = false;
+		reset();
+
+		// ---old time---
+
 		levelN = num;
 		switch (num) {
 			case 1:
@@ -2051,7 +2090,6 @@
 				Map['token']['lv4'].found = true;
 				break;
 		};
-		reset();
 		clearInterval(animationLoop);
 		cancelAnimationFrame(game.animationFrame);
 		Level.init();
@@ -2114,19 +2152,33 @@
 				trigger.interval = null;
 			}
 		}
-		if (trigger.disposable) {
+		if (from && trigger.disposable) {
 			delElem(trigger, from);
 		}
 	};
 
-	var delElem = function(elem, from) {
-		var index = from.indexOf(elem);
-		from.splice(index, 1);
+	var deepCopy = function(obj) {
+		var result = Array.isArray(obj) ? [] : {};
+		for (var key in obj) {
+			if (obj.hasOwnProperty(key)) {
+				if (typeof obj[key] === 'Object' && obj[key] !== null) {
+					result[key] = deepCopy(obj[key]);
+				} else {
+					result[key] = obj[key];
+				}
+			}
+		}
+		return result;
+	}
+
+	var delElem = function(elem, fromArray) {
+		var index = fromArray.indexOf(elem);
+		fromArray.splice(index, 1);
 	};
 
 	var playSound = function(sound) {
 		if (sound == 'push') {
-			if (lastPushSoundPlayTime) {
+			if (lastPushSoundPlayTime) { 
 				var curTime = Date.now(),
 					interval = curTime - lastPushSoundPlayTime;
 				if (interval > 700) {
@@ -2134,12 +2186,26 @@
 					game[sound].currentTime = 0;
 					game[sound].play();
 					lastPushSoundPlayTime = curTime;
-					return;
 				}
+				return;
 			} else {
-				lastPushSoundPlayTime = Date.now();
+				lastPushSoundPlayTime = Date.now(); // game start
 			}
-		} else if (sound !== 'footstepSound') {
+		} else if (sound == 'footstepSound') {
+			if (lastFootStepSoundPlayTime) { 
+				var curTime = Date.now(),
+					interval = curTime - lastFootStepSoundPlayTime;
+				if (interval > 400) {
+					game[sound].pause();
+					game[sound].currentTime = 0;
+					game[sound].play();
+					lastFootStepSoundPlayTime = curTime;
+				}
+				return;
+			} else {
+				lastFootStepSoundPlayTime = Date.now(); // game start
+			}
+		} else {
 			game[sound].pause();
 			game[sound].currentTime = 0;
 		}
@@ -2147,6 +2213,13 @@
 	}
 
 	var reset = function() {
+		// clear conditional triggers of last level
+		var triggers = Level.levels[levelN].triggers;
+		for (var trigger of triggers) {
+			if (trigger.type == 'conditional') {
+				clearTrigger(trigger);
+			}
+		}
 		needPanning = true;
 		fog = false;
 		chestList = null;
