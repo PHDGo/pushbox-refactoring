@@ -568,6 +568,7 @@
 		showTitle: function() {
 			var topCanvas = game.topCanvas;
 			function clickStart(e) {
+				playSound('clickSound');
 				topCtx.clearRect(0, 0, canvasW, canvasH);
 				game.start();
 				removeEvent(topCanvas, 'click', clickStart);
