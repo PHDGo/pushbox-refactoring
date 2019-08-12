@@ -1,4 +1,6 @@
 body {
+	margin: 0;
+	margin-top: 10px;
 	background-color: #000;
 }
 
@@ -41,6 +43,7 @@ canvas {
 }
 
 .introduce p {
+	line-height: 30px;
 	background-color: #eee;
 	text-align: center;
 }
