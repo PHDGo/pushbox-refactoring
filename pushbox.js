@@ -222,15 +222,15 @@
 					// }
 					game.switchTimeout = setTimeout(function(){switchLevel(levelN);}, 1000);
 					break;
-				case 113:
-					Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
-					if (levelN !== 0) {
-						Map['token']['lv'+levelN].found = true;
-						Map['token']['lv'+levelN].finish = true;
-					}
-					levelComplish = true;
-					game.switchTimeout = setTimeout(function(){switchLevel(0);}, 1000);
-					break;
+				// case 113:
+				// 	Level.levels[0].chests = [snakeChestPos, statueChestPos, tombChestPos];
+				// 	if (levelN !== 0) {
+				// 		Map['token']['lv'+levelN].found = true;
+				// 		Map['token']['lv'+levelN].finish = true;
+				// 	}
+				// 	levelComplish = true;
+				// 	game.switchTimeout = setTimeout(function(){switchLevel(0);}, 1000);
+				// 	break;
 			};
 		}
 	};
