@@ -1194,7 +1194,7 @@
 					mapGridX: curLevel.born.x,
 					mapGridY: curLevel.born.y,
 					actions: Role.rawActions,
-					speed: 5,
+					speed: 4,
 				});
 			Object.assign(man, commonFunc, Role);
 			man.init();
@@ -1633,7 +1633,7 @@
 
 	var Chest = {
 		// friction: -4,
-		easing: 0.3,
+		easing: 0.1,
 		rawActions: [
 			{name: "stand", frame: 1},
 			{name: "inPlace", frame: 3},
@@ -1703,7 +1703,7 @@
 						};
 						vy = Math.abs(this.mapY - this.nextY) * this.easing;
 						this.mapY -= vy;
-						if (this.mapY - 2 <= this.nextY) {
+						if (this.mapY - 8 <= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
 							// if (this.mapGridY < 0) {
@@ -1744,7 +1744,7 @@
 						};
 						vy = Math.abs(this.mapY - this.nextY) * this.easing;
 						this.mapY += vy;
-						if (this.mapY + 2 >= this.nextY) {
+						if (this.mapY + 8 >= this.nextY) {
 							this.mapGridY = this.nextMapGridY;
 							this.mapY = this.nextY;
 							// if (this.mapGridY >= curLevel.mapGridHeight) {
@@ -1785,7 +1785,7 @@
 						};
 						vx = Math.abs(this.mapX - this.nextX) * this.easing;
 						this.mapX -= vx;
-						if (this.mapX - 2 <= this.nextX) {
+						if (this.mapX - 8 <= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
 							// if (this.mapGridX < 0) {
@@ -1826,7 +1826,7 @@
 						};
 						vx = Math.abs(this.mapX - this.nextX) * this.easing;
 						this.mapX += vx;
-						if (this.mapX + 2 >= this.nextX) {
+						if (this.mapX + 8 >= this.nextX) {
 							this.mapGridX = this.nextMapGridX;
 							this.mapX = this.nextX;
 							// if (this.mapGridX >= curLevel.mapGridWidth) {
