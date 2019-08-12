@@ -554,18 +554,27 @@
 	};
 
 	var title = {
-		container: document.getElementsByClassName('game-container')[0],
-		showLoadingScreen: function() {
-			var loadingScreen = document.createElement('div'),
-				outerCircle = document.createElement('div'),
-				innerCircle = document.createElement('div');
-			loadingScreen.className = 'loadingScreen';
-			loadingScreen.appendChild(outerCircle);
-			loadingScreen.appendChild(innerCircle);
-			container.appendChild(loadingScreen);
-		},
-		drawTitle: function() {
-
+		// container: document.getElementsByClassName('game-container')[0],
+		// showLoadingScreen: function() {
+		// 	var loadingScreen = document.createElement('div'),
+		// 		outerCircle = document.createElement('div'),
+		// 		innerCircle = document.createElement('div');
+		// 	loadingScreen.className = 'loadingScreen';
+		// 	loadingScreen.appendChild(outerCircle);
+		// 	loadingScreen.appendChild(innerCircle);
+		// 	container.appendChild(loadingScreen);
+		// },
+		showTitle: function() {
+			var topCanvas = game.topCanvas;
+			function clickStart(e) {
+				topCtx.clearRect(0, 0, canvasW, canvasH);
+				// game.start();
+				removeEvent(topCanvas, 'click', clickStart);
+			};
+			addEvent(topCanvas, 'click', clickStart);
+			var topCtx = topCanvas.getContext('2d');
+			topCtx.drawImage(game.clickStart, 153, 187, 110, 10);
+			// game.start();
 		},
 	};
 
@@ -588,7 +597,8 @@
 			{name:'map', url:'image/map', ext:'.png'},
 			{name:'young', url:'image/charactor_young', ext:'.png'},
 			{name:'correctSound', url:'sound/correct', ext:'.wav'},
-			{name:'winSound', url:'sound/win', ext:'.wav'}
+			{name:'winSound', url:'sound/win', ext:'.wav'},
+			{name:'clickStart', url:'image/clickStart', ext:'.png'}
 		],
 
 		init: function() {
@@ -634,7 +644,7 @@
 				console.log(loader.loadedItemCount);
 				loader.loadedItemCount = 0;
 				loader.totalItemCount = 0;
-				game.start();
+				title.showTitle();
 				// hideScreen('loadingScreen');
 				// showScreen('gameStartScreen');
 			}
@@ -2266,11 +2276,6 @@
 	// };
 
 	addEvent(window, 'load', function() {
-		function clickStart(e) {
-			game.setup();
-			removeEvent(container, 'click', clickStart);
-		};
-		var container = document.getElementsByClassName('game-container')[0];
-		addEvent(container, 'click', clickStart);
+		game.setup();
 	});
 })()
