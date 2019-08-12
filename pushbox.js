@@ -29,7 +29,8 @@
 		animationTimeOut = 100,
 		rectTile = [352, 288],
 		chestImgPositions = [[0, 64], [160, 64], [320, 64]],
-		UIImgPos = [704, 64];
+		UIImgPos = [704, 64],
+		bgmLength = '124.943673';
 
 	var game = {
 		botCanvas: document.getElementById('bot-canvas'),
@@ -61,7 +62,7 @@
 		animate: function() {
 			unit.animate();
 			Shader.switchShadersAlpha();
-			if (game.bgm.currentTime == '124.88') {
+			if (game.bgm.currentTime == bgmLength) {
 				playSound('bgm');
 			}
 			if (fog) {
@@ -591,7 +592,7 @@
 			{name:'sprite', url:'image/sprite', ext:'.png'},
 			{name:'clickSound', url:'sound/click', ext:'.wav'},
 			{name:'push', url:'sound/push', ext:'.ogg'},
-			{name:'bgm', url:'sound/bgm', ext:'.wav'},
+			{name:'bgm', url:'sound/bgm', ext:'.mp3'},
 			{name:'footstepSound', url:'sound/footstep', ext:'.ogg'},
 			{name:'release', url:'sound/release', ext:'.wav'},
 			{name:'map', url:'image/map', ext:'.png'},
@@ -2205,7 +2206,7 @@
 			if (lastFootStepSoundPlayTime) { 
 				var curTime = Date.now(),
 					interval = curTime - lastFootStepSoundPlayTime;
-				if (interval > 400) {
+				if (interval > 600) {
 					game[sound].pause();
 					game[sound].currentTime = 0;
 					game[sound].play();
