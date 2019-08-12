@@ -26,7 +26,7 @@
 		levelN = 0,
 		tileSize = 32,
 		imgGridWidth = 30,
-		animationTimeOut = 100,
+		animationTimeOut = 50,
 		rectTile = [352, 288],
 		chestImgPositions = [[0, 64], [160, 64], [320, 64]],
 		UIImgPos = [704, 64],
@@ -594,7 +594,7 @@
 			{name:'clickSound', url:'sound/click', ext:'.mp3'},
 			{name:'push', url:'sound/push', ext:'.ogg'},
 			{name:'bgm', url:'sound/bgm', ext:'.mp3'},
-			{name:'footstepSound', url:'sound/footstep', ext:'.ogg'},
+			// {name:'footstepSound', url:'sound/footstep', ext:'.ogg'},
 			{name:'release', url:'sound/release', ext:'.mp3'},
 			{name:'map', url:'image/map', ext:'.png'},
 			{name:'young', url:'image/charactor_young', ext:'.png'},
@@ -1194,7 +1194,7 @@
 					mapGridX: curLevel.born.x,
 					mapGridY: curLevel.born.y,
 					actions: Role.rawActions,
-					speed: 8,
+					speed: 5,
 				});
 			Object.assign(man, commonFunc, Role);
 			man.init();
@@ -1299,7 +1299,8 @@
 				frameHeight = this.frameHeight,
 				imgPos = this.imgPos,
 				drawingInterpolationFactor = game.drawingInterpolationFactor,
-				spritePos = [imgPos[0] + this.curFrameIndex * frameWidth, imgPos[1]];
+				curFrameIndex = Math.floor(this.curFrameIndex / 1);
+				spritePos = [imgPos[0] + curFrameIndex * frameWidth, imgPos[1]];
 			this.canvasX = this.mapX - this.pixelOffsetX - border.left - drawingInterpolationFactor * this.lastMovementX;
 			this.canvasY = this.mapY - this.pixelOffsetY - border.up - drawingInterpolationFactor * this.lastMovementY;
 
@@ -1440,11 +1441,11 @@
 			var nextAct = this.nextAct,
 				oAct = this.oAct,
 				act = oAct.name,
-				step = 1,
+				step = 0.5,
 				startIndex;
 			if (act == nextAct) {
 				startIndex = oAct.startIndex;
-				if (act == 'standL' || act == 'standR') { step = Math.random() > 0.5 ? 0 : 1 };
+				if (act == 'standL' || act == 'standR') { step = Math.random() > 0.5 ? 0.2 : 0.5 };
 				this.curFrameIndex += step;
 				if (this.curFrameIndex >= startIndex + oAct.frame) {
 					if (act == 'playL' || act == 'playR') {
