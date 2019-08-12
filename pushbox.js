@@ -568,7 +568,7 @@
 			var topCanvas = game.topCanvas;
 			function clickStart(e) {
 				topCtx.clearRect(0, 0, canvasW, canvasH);
-				// game.start();
+				game.start();
 				removeEvent(topCanvas, 'click', clickStart);
 			};
 			addEvent(topCanvas, 'click', clickStart);
@@ -592,7 +592,7 @@
 			{name:'clickSound', url:'sound/click', ext:'.wav'},
 			{name:'push', url:'sound/push', ext:'.ogg'},
 			{name:'bgm', url:'sound/bgm', ext:'.wav'},
-			{name:'footstepSound', url:'sound/footstep', ext:'.wav'},
+			{name:'footstepSound', url:'sound/footstep', ext:'.ogg'},
 			{name:'release', url:'sound/release', ext:'.wav'},
 			{name:'map', url:'image/map', ext:'.png'},
 			{name:'young', url:'image/charactor_young', ext:'.png'},
