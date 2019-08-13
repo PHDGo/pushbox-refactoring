@@ -165,7 +165,7 @@
 					ctrl.down = true;
 					break;
 				case 90:
-					game.man.speed = 16;
+					game.man.speed = 8;
 					break;
 			};
 		},
@@ -186,7 +186,7 @@
 					ctrl.down = false;
 					break;
 				case 90:
-					game.man.speed = 8;
+					game.man.speed = 4;
 					break;
 			};
 		},
