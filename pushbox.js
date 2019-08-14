@@ -1712,11 +1712,7 @@
 							// };
 							this.arrive = true;
 							this.updateOnRect();
-							if (this.onRect) {
-								this.processOrder('inPlace');
-							} else {
-								this.processOrder('stand');
-							};
+							this.switchAnimation();
 							this.dir = '';
 						};
 						break;
@@ -1753,11 +1749,7 @@
 							// };
 							this.arrive = true;
 							this.updateOnRect();
-							if (this.onRect) {
-								this.processOrder('inPlace');
-							} else {
-								this.processOrder('stand');
-							};
+							this.switchAnimation();
 							this.dir = '';
 						};
 						break;
@@ -1794,11 +1786,7 @@
 							// };
 							this.arrive = true;
 							this.updateOnRect();
-							if (this.onRect) {
-								this.processOrder('inPlace');
-							} else {
-								this.processOrder('stand');
-							};
+							this.switchAnimation();
 							this.dir = '';
 						};
 						break;
@@ -1835,11 +1823,7 @@
 							// };
 							this.arrive = true;
 							this.updateOnRect();
-							if (this.onRect) {
-								this.processOrder('inPlace');
-							} else {
-								this.processOrder('stand');
-							};
+							this.switchAnimation();
 							this.dir = '';
 						};
 						break;
@@ -1895,7 +1879,7 @@
 			};
 		},
 
-		updateOnRect:function() {
+		updateOnRect: function() {
 			var rects = curLevel.rects;
 			for (var rect of rects) {
 				if (this.mapGridX == rect[0] && this.mapGridY == rect[1]) {
@@ -1904,6 +1888,14 @@
 				};
 			};
 			this.onRect = false;
+		},
+
+		switchAnimation: function() {
+			if (this.onRect) {
+				this.processOrder('inPlace');
+			} else {
+				this.processOrder('stand');
+			};
 		}
 	};
 
@@ -2048,13 +2040,19 @@
 			} else {
 				lastChest = lastStatus.chest;
 			}
-			lastDir = lastStatus.dir;
-			man = game.man;
+			//recover status of last moved chest
 			prePosition = lastChest.prePosition;
 			lastChest.mapGridX = prePosition.mapGridX;
 			lastChest.mapGridY = prePosition.mapGridY;
 			lastChest.mapX = lastChest.mapGridX * tileSize + lastChest.box.marginLeft;
 			lastChest.mapY = lastChest.mapGridY * tileSize + lastChest.box.marginUp;
+			lastChest.updateOnRect();
+			lastChest.switchAnimation();
+			lastChest.dir = '';
+			lastChest.arrive = true;
+			//recover status of man
+			lastDir = lastStatus.dir;
+			man = game.man;
 			switch (lastDir) {
 				case 'up':
 					man.mapY = lastChest.mapY + lastChest.height;
@@ -2073,9 +2071,6 @@
 					man.mapY = lastChest.mapGridY * tileSize + man.box.marginUp;
 					break;
 			};
-			lastChest.dir = '';
-			lastChest.arrive = true;
-			needPanning = true;
 			canPullBack = false;
 		};
 
