@@ -1,3 +1,4 @@
+//@flow
 ;(function(){
 	var sin45 = Math.sin(45 * Math.PI / 180),
 		size = 1,
@@ -42,6 +43,10 @@
 			botCtx = this.botCanvas.getContext('2d');
 			stageCtx = this.stageCanvas.getContext('2d');
 			topCtx = this.topCanvas.getContext('2d');
+
+			botCtx.imageSmoothingEnabled = false;
+			stageCtx.imageSmoothingEnabled = false;
+			topCtx.imageSmoothingEnabled = false;
 
 			canvasW = this.botCanvas.width;
 			canvasH = this.botCanvas.height;
